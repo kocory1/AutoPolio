@@ -1,0 +1,40 @@
+{
+  "id": "201376",
+  "source": "잡코리아",
+  "url": "https://www.jobkorea.co.kr/starter/PassAssay/View/201376?Page=8&OrderBy=0&FavorCo_Stat=0&schPart=10031&Pass_An_Stat=0",
+  "crawled_at": "2026-02-20T06:25:23.792795Z",
+  "company": "(주)한국존슨앤드존슨",
+  "position": "신입 DBA",
+  "year": "2020년 상반기",
+  "questions": [
+    {
+      "question": "SUMMARY",
+      "answer": "Data Scientist with +3 years of experience in data analytics, research and development in various aspects for both business and science. Comfortable jumping into unfamiliar projects and learning new skillsets along the way. Working with a newly formed data science team, which has allowed me the opportunity to make meaningful contributions and have greater influence in decision making. With working with this team, have also learned in terms of deployment and the software development aspect of data science and how to productionize a model."
+    },
+    {
+      "question": "EXPERIENCE (Data Scientist  Analyst - Intern /Johnson & Johnson)",
+      "answer": "◆ Greatly improved a model used for predicting clean times of homes for scheduling and cost estimation. Took the model all the way from conception to production, while iterating versions. This involved working closely with engineering teams to scope out how model would interact with scheduler and getting model in a production ready state. The result was a greatly decreased error rate with an ROI of $3.4m. This was extended to build a model that would help onboarding specialists have data to better negotiate contractor rates. \r\n \n◆ Led feature engineering side of data lake project to provide central source of features among both the data science team and rest of the company (mainly analysts). Main goal was to reduce duplicate efforts among the team and increase knowledge sharing. \r\n \n◆ As part of project, wrote tickets and prioritized all work. Mentored two interns. Used python/dask to create features and write them to S3 buckets. Worked with engineering using Athena + AWS Glue to get features from S3 to be queried through Redshift Spectrum. Created over 30 features in 2 months. This was a continuous work in progress as well and gave experience with geographical data. \r\n \n◆ Worked on first pass recommendation system for website, mobile apps, and marketing. This involved an API and taking on a lot of software engineering tasks for deployment. The recommendation system suggested markets using s2spheres in order to generalize and better map to other location data at Johnson & Johnson. \r\n \n◆ Continued work on the owner churn model and exploring different methods. Part of this also involved identifying gaps in owner data and engagement as well as some possible ways to to help increase and capture both. Along with that, also identified other data that could be acquired to further help with accuracy of the model."
+    },
+    {
+      "question": "EXPERIENCE (Bioinformaticist / University of OOO - OOO Institute of Molecular Biology)",
+      "answer": "◆ Worked in OOO' and OOO Labs. Updated and managed scripts for analysis of ChIP-seq and RNA-seq data. \r\n \n◆ Compared ChIP-seq datasets looking at differences in RNA pol II binding between different strains of n. crassa. Done using various data analysis programs and automated using R and bash scripting. \r\n \n◆ Developed an extension of a phage display analysis pipeline. Researched and implemented different methods of data clustering. \r\n \n◆ Developed a GUI using PyQt5 for python API that analyses isothermal calorimetry (ITC) data. Along with this, wrote documentation for GUI using sphinx on Read the Docs as well as a C extension to calculate the binding polynomial in the API."
+    },
+    {
+      "question": "DATA SCIENCE PROJECTS",
+      "answer": "PyTC Project \r\n◆ https://github.com/harmslab/pytc-gui\r\n◆ https://github.com/harmslab/pytc"
+    },
+    {
+      "question": "EDUCATION",
+      "answer": "Bachelors of Science in Biochemistry Minor in Chemistry, Computer Science, and Molecular Biology\r\n◆ University of OOO- OOO OOO, WI 2014"
+    },
+    {
+      "question": "VOLUNTEERING",
+      "answer": "Volunteer University of OOO - OOO OOOO  July 2016 \r\n◆ Volunteered for a week helping during the OOO summer camps which aim to engage young girls in physical sciences."
+    },
+    {
+      "question": "SKILLS",
+      "answer": "◆ Data Science: \r\nPandas/Geopandas, Numpy, Scikit-learn, Matplotlib, Keras, Data Visualization, Feature Engineering/ETL, Linear Algebra, Statistics, Predictive Modeling, Machine Learning, Image Processing, Documentation, Presentation/Communication (oral and written)\r\n \n◆ Programming: \r\nPython, PostgreSQL, Git, Bash, R, Docker, AWS"
+    }
+  ],
+  "expert_feedback": null
+}

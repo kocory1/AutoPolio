@@ -1,0 +1,28 @@
+{
+  "id": "236157",
+  "source": "잡코리아",
+  "url": "https://www.jobkorea.co.kr/starter/PassAssay/View/236157?Page=7&OrderBy=0&FavorCo_Stat=0&schPart=10031&Pass_An_Stat=0",
+  "crawled_at": "2026-02-20T06:24:24.178859Z",
+  "company": "(주)케이티디에스",
+  "position": "신입 웹개발자",
+  "year": "2020년 하반기",
+  "questions": [
+    {
+      "question": "kt ds 및 해당 직무에 지원한 동기와 kt ds 입사 후 해당 직무의 전문가로 성장하기 위해 어떠한 노력을 할지 구체적으로 기술해 주십시오.",
+      "answer": "저는 KT DS에서 경영 기반 IT 솔루션 개발자로서 Digital transformation, AICentro DL Studio, 금융 IT, 비즈니스 솔루션 지원 서비스의 발전에 기여하겠습니다."
+    },
+    {
+      "question": "지원한 직무를 수행하기 위해 필요한 핵심역량은 무엇이라고 생각하며, 그 이유에 대해 설명해 주십시오. 또한 해당 역량을 갖추기 위해 본인이 어떤 노력을 하였는지 기술해 주십시오.",
+      "answer": "Core Competency인 Digital transformation과 비즈니스 지원 SW 솔루션 개발을 위해 AI, 빅데이터, 앱 개발 능력, 금융 및 경영 도메인 지식이 필수라고 생각합니다. 고객 비즈니스의 과학화, 지능화를 위한 최적의 AI, SW 솔루션을 제공하기 위해서는, 대상 기업의 fundamental한 MIS system, 그리고 경영 및 CRM 등의 마케팅 전략을 파악한 후 최적의 SW 아키텍처와 기술을 적용한 실제 어플리케이션을 개발해야 하기 때문입니다."
+    },
+    {
+      "question": "최근 3년내 가장 어려웠던 도전은 무엇이었으며 그 경험을 통해 무엇을 배웠는지 기술해 주십시오.",
+      "answer": "시큐레이어에서 AI 신기술이기에 기존의 연구 논문 수가 부족한 Meta feature extraction 연구에 도전하여, 약 MFE와 AutoML에 관한 15개 이상의 영문 논문과 OpenML, 사이킷런의 AutoML 라이브러리, 그리고 Feature selection algorithm recommendation 논문 등 기존 MFE 활용 방안의 프로세스를 심층 분석했습니다."
+    },
+    {
+      "question": "공동의 목표 달성을 위한 협업 경험을 본인이 수행한 역할 중심으로 설명하고, 그 경험을 통해 무엇을 얻었는지 기술해 주십시오.",
+      "answer": "저는 언콘택트라는 대비되지 않는 새로운 시대에 발생하는 소비자들의 새로운 불편과 니즈를 충족시키는 SW 솔루션을 가장 먼저 제공하는 경험을 했으며, KT DS에서도 또한 클라이언트와 고객의 비즈니스 니즈를 가장 먼저 파악하고 최적의 SW 솔루션으로 충족시킬 자신이 있습니다. 구체적으로, OOO SW 공모전 본선에서 ‘e학습터’, ‘클래스팅’의 한계를 보완하는 최초의 교육 지원 웹 앱을 초등 교사 설문을 통해 기획하여 현재 제작 중입니다."
+    }
+  ],
+  "expert_feedback": null
+}

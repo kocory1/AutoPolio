@@ -1,0 +1,7 @@
+# 크롤링 스크립트 의존성 (참고용)
+# 프로젝트는 Poetry 사용. 루트에서 poetry install 하면 됨.
+# pip만 쓸 경우: pip install -r scripts/requirements-crawl.txt
+requests>=2.28.0
+beautifulsoup4>=4.11.0
+playwright>=1.40.0
+openai>=1.0.0

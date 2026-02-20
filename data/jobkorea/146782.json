@@ -1,0 +1,20 @@
+{
+  "id": "146782",
+  "source": "잡코리아",
+  "url": "https://www.jobkorea.co.kr/starter/PassAssay/View/146782?Page=29&OrderBy=0&FavorCo_Stat=0&schPart=10031&Pass_An_Stat=0",
+  "crawled_at": "2026-02-20T06:38:15.536682Z",
+  "company": "나이스정보통신(주)",
+  "position": "신입 시스템엔지니어",
+  "year": "2016년 하반기",
+  "questions": [
+    {
+      "question": "상세 경력사항 - 해당자에 한함, 비해당자는 \"해당사항 없음\"을 입력",
+      "answer": "1) OO 모바일 앱 서비스 개발\r\n- 기관명 : (주)OO\r\n- 기간 : 2015.01 ~ 2015.09\r\n- 근무부서/직위 : 서비스 개발/개발 전담\r\n- 서비스 소개 : 남성 퍼스널 스타일링 서브스크립션 O2O 서비스\r\n- 업무 성과 : 서비스 개발 완료 및 구글 플레이 스토어 상용화, 전체 회원가입자수 5000명 달성, 정기 스타일링 서비스 신청회원 200명 달성\r\n- 개발환경 : [Java(Android), Node.js / Eclipse], [MySQL / MySQL WorkBench], [SVN / Subclipse]\r\n- 담당개발 : Client 전체 개발, 미들웨어 서버 개발, DB 설계 및 구축\r\n \n● Client Side\r\n안드로이드 개발 : UX 설계에 따른 Layout 구현 및 서버와 통신을 위한 Network Manager 모듈 개발\r\n \n● Server Side\r\n미들웨어 서버 개발 : Node.js를 이용한 Restful API 서비스 개발. Amazon AWS EC2를 이용한 Server Hosting 구축, 결재 PG사와 서버 연동, 배송 현황 및 도로명/지번 주소 검색 Open API를 이용한 배송조회 및 주소입력 기능 구현\r\n \n● DB\r\nMySQL : 회원정보의 트렌젝션-세이프를 위해 InnoDB의 MySQL을 통해 DB 구축. Amazon AWS RDS를 이용한 DB Server Hosting 구축\r\n \n2) Smartfren MIFI Andromax M2Y Firmware 개발\r\n- 기관명 : (주)OO\r\n- 기간 : 2016.01 ~ 2016.04\r\n- 근무부서/직위 : Firmware Application 개발/인턴\r\n- 프로젝트 소개 : 인도네시아 통신사 중 하나인 Smartfren사의 포켓WiFi인 ‘Andromax M2Y’의 Firmware를 개발하였습니다. 해당 Device는 4G LTE 신호를 포켓WiFi를 이용하여 데이터를 사용할 수 있도록 해주는 휴대용 라우터입니다.\r\n- 업무성과 : 프로젝트 개발완료 및 고객사측 Solution 배포 완료, 당사 상반기 매출 15% 수준 달성에 기여\r\n- 개발환경 : [Linux / Ubuntu 14.01], [C, Shell, javascript / Eclipse CDT], [SVN / GCT SVN SourceStorage]\r\n- 담당개발 : Marvell WiFi Application 제어 Daemon 개발, 네트워크 고급설정 기능 구현, WiFi Disk 구현\r\n \n● Marvell WiFi Application 제어 Daemon 개발\r\nCPE Web Page : Host IP를 통해 사용자가 WiFi 설정 정보를 변경 할 수 있도록 Web UI 구현\r\nWiFi 모듈 제어 Daemon : Marvell WiFi 모뎀칩상의 WiFi Application을 통해 WiFi 구성 정보를 설정하고 제어하는 Daemon 프로그램 개발\r\n \n● 네트워크 고급설정 기능 구현\r\n외부 네트워크 Filtering 기능 구현: MAC/IP/PORT/URL Filter 및 Port Forwarding\r\n \n● WiFi Disk\r\n웹스토리지 기능. 해당 Device에 탑재된 MicroSD Card로 WiFi 신호를 통해 File 송수신. 기능으로는 File Upload, Download, Delete, Renaming, New Folder와 Image/Text/Audio/Movie File을 Web Page 상으로 미리 보는 미리 보기 기능 구현\r\n \n3) INC Smart Meter\r\n- 기관명 : (주)OO\r\n- 기간 : 2016.05 ~ 2016.06\r\n- 근무부서/직위 : Firmware Application 개발/인턴\r\n- 프로젝트 소개 :  각 가정의 전기 사용량을 측정한 데이터를 LTE 신호에 실어 전기 회사에 송수신하는 스마트 계량기의 Firmware Solution을 개발하였습니다.\r\n- 업무 성과 : 프로젝트 개발 완료 및 Solution 배포\r\n- 개발환경 : 개발환경 : [Linux / Ubuntu 14.01], [C, Shell / Eclipse CDT], [SVN / GCT SVN SourceStorage]\r\n- 담당개발 : Multi Client Socket Server 구현\r\n \n● Multi Client Sokcet Server 구현\r\n동시에 10개의 Client Application과 동시에 통신하는 비동기식 TCP Socket Server 구현"
+    },
+    {
+      "question": "자신을 자유롭게 소개하시오. 다만, 출신학교명 언급은 피하시기 바랍니다.",
+      "answer": "어렸을 적부터 남들이 상상도 하지 못한 미래의 해저도시, 음식, 패션 등을 그려 주변사람들을 놀라게 함으로써 독특한 아이디어를 가졌다는 평을 받았습니다. 이러한 저의 독특한 아이디어를 자유롭게 실현할 수 있는 프로그래밍에 흥미를 느끼게 되었고 자연스레 컴퓨터공학과로 진학하게 되었습니다. \r\n \n남들이 생각해내지 못한 새로운 개념의 서비스를 개발하고자 대학 전공뿐만 아니라 개발 전문가 교육기관인 oo아카데미에서 다수의 프로그래밍 전문가 과정을 이수함으로써 개발자로서의 역량을 쌓고자 노력하였습니다.\r\n \n독특한 아이디어로 세상을 놀라게 하기 위한 첫 걸음으로 1년 전, ‘OO’이라는 패션 쇼핑몰을 창업하였습니다. ‘선결제 후확인’이라는 기존 쇼핑몰과 차별을 둔 ‘선확인 후결제’라는 운영방식을 통해 고객의 신뢰와 편의성을 제공하고자 하였습니다. 또한 개인맞춤 스타일링 서비스 제공이라는 콘셉트를 통해 기존 쇼핑몰과 경쟁력을 갖추고자 하였고 여성이 아닌 남성을 주 고객층으로 함으로써 틈새시장을 공략하였습니다. \r\n \n이는 자연스레 쇼핑몰 업계 최초로 남성 개별맞춤 O2O 스타일링 서비스를 실현한 계기가 되었고, 경쟁사 대비 반품 및 환불이 평균 4% 낮은 비율로 발생하게 되었습니다. 이러한 결과를 바탕으로 SK 플래닛의 육성 스타트업으로 선정되는 기회를 얻을 수 있었습니다.\r\n \n하지만 이런 성과에도 무슨 문제든 혼자서 해결하려 하는 단점 때문에 서비스 개발 도중 뜻하지 않게 어려움에 부딪힌 적이 있습니다. 결제 시스템 구현 도중 결제PG사에서 제공하는 PHP 기반의 코드 샘플 및 매뉴얼이 제가 구현한 서버 플랫폼인 Node.js와 많이 달라 구현에 어려움을 겪었습니다. \r\n \nPHP 프로그래밍 서적과 인터넷 검색 등 노력을 하였지만 5일이라는 시간을 허비하게 되었습니다. 결국 결제PG사에 전화 및 메일을 통해 실무자에게 도움을 요청하였고 단 하루 만에 간단하게 해결할 수 있는 문제였음을 알게 되었을 때 큰 허탈감을 느꼈습니다. 이를 계기로 문제가 발생하면 대상이 누구든 먼저 다가가 물어보고 배움으로써 빠르게 문제를 해결하고자 노력하고 있습니다.\r\n \n비록 단점 때문에 서비스 개발 도중 어려운 일도 많았지만 ‘서비스의 주인은 나’라는 책임감이 쇼핑몰 서비스를 상용화하도록 이끈 원동력이었습니다. 다양한 전공으로 구성된 창업 팀에서 개발자는 저 혼자뿐이었기 때문에 서비스의 프론트/백-엔드 를 혼자서 개발하는 것은 쉬운 일이 아니었습니다. \r\n \n하지만 이 창업은 내 아이디어로 시작되었고 나 이외의 누구도 개발을 맡을 수 없다는 책임감을 가지고 3개월간 사무실에서 밤낮을 새운 끝에 목표한 기간 내에 서비스를 구현하고 상용화 할 수 있었습니다."
+    }
+  ],
+  "expert_feedback": null
+}

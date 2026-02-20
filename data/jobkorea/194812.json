@@ -1,0 +1,24 @@
+{
+  "id": "194812",
+  "source": "잡코리아",
+  "url": "https://www.jobkorea.co.kr/starter/PassAssay/View/194812?Page=13&OrderBy=0&FavorCo_Stat=0&schPart=10031&Pass_An_Stat=0",
+  "crawled_at": "2026-02-20T06:28:30.836240Z",
+  "company": "NHN Entertainment Service",
+  "position": "신입 QA",
+  "year": "2018년 상반기",
+  "questions": [
+    {
+      "question": "자신에 대해 자유롭게 표현해주세요.",
+      "answer": "새로운 일에 대한 도전과 배움에 대한 끝없는 열정을 지닌 저는, 현재 이곳에 오기까지 자신만의 역량을 쌓았습니다."
+    },
+    {
+      "question": "지원동기와 입사 후 NHN Entertainment Service에서 자신의 미래 모습을 기술하시오.",
+      "answer": "대학교 4학년 졸업프로젝트 때 제작 중이던 게임 체험판에 문제가 생겼는데, 분명히 각 부분(캐릭터 이동 + 적 처리)에선 문제없었던 것이 합쳐 놓으니 적이 죽지 않는 문제가 발생한 것입니다. 거기다 어느 지점이 문제인지 정확히 파악을 안 한 탓에, 해당 코드의 오류를 찾느라 하루를 보내기도 하였습니다. \r\n \n이날 이후로 느낀 것은, QA는 어느 측면이든 중요하다는 것입니다. 회사 차원에서는 훌륭한 제품을 출시하기 위한 최종 관문이고 따라서 사용자 측면에서 제품을 신중하게 검토해야 하는데, 이 과정에서 개발자와 경영진 사이에서 중재하는 데 논리적인 설명도 필요합니다."
+    },
+    {
+      "question": "분 자기소개 해 주세요\n\n\n면접",
+      "answer": ""
+    }
+  ],
+  "expert_feedback": null
+}
