@@ -2,10 +2,23 @@
   "id": "25074",
   "source": "링커리어",
   "url": "https://linkareer.com/cover-letter/25074",
-  "crawled_at": "2026-02-20T08:01:27.416031Z",
+  "crawled_at": "2026-02-23T11:55:42.292511Z",
   "company": "SKT / 측위 기술 및 서비스 개발 SW 전문가 / 2020 하반기",
-  "position": "기업",
+  "position": "",
   "year": "",
-  "questions": [],
+  "questions": [
+    {
+      "question": "세부 직무 관련된 주요 경험 (기간포함, 우선순위 순서 작성)",
+      "answer": "1. IEEE 주관/Indoor Positioning and Indoor Navigation 2019 Competition (2019.6 ~ 2019.9) - 실내위치측위 경진대회로서 Smartphone base 트랙에 참여 - Wi-Fi와 지자기를 통한 시작 위치 측위 및 보행 중 PDR과 상호작용하여 위치 보정 - Wi-FI와 지자기 값을 Finger-Printing 방법으로 여러 번 수집 후 Machine Learning을 이용하여 학습 - 주행 시 환경에 영향을 받지 않는 보행자추측항법 (Pedestrian Dead Rocking, PDR) 알고리즘을 메인으로 주행 - PDR 알고리즘 관련 논문분석 및 구현 - 광센서를 이용하여 실내외 구분하고 실외에서는 GPS, 실내에서는 PDR 및 Wi-FI, 지자기를 이용하여 유연하게 위치측위를 구현"
+    },
+    {
+      "question": "세부 직무 관련된 주요 경험 (기간포함, 우선순위 순서 작성)",
+      "answer": "2. Microsoft 주관 Indoor Localization Competition IPSN 2018 (2018 .01 ~ 2018 .04) - 실내위치측위 경진대회로서 2D 트랙에 참여 - PDR 알고리즘 이용하여 실시간 실내위치측위 App 구현 - 알고리즘 결과를 통해 실시간으로 현재위치를 지도에 표시 - 3rd PLACE IN THE 2D CATEGORY"
+    },
+    {
+      "question": "세부 직무 관련된 주요 경험 (기간포함, 우선순위 순서 작성)",
+      "answer": "3. IEEE 주관 Indoor Positioning and Indoor Navigation 2017 Competition (2017. 6 ~ 9) - 실내위치측위 경진대회로서 Smartphone base 트랙에 참여 - App에서 Wi-Fi 값을 읽어와 구현된 Wi-Fi 알고리즘에 적용 - Wi-Fi 알고리즘 결과를 통해 실시간으로 현재 위치를 지도에 표시 - Client App과 Server App간의 데이터 전송 구현 - RUNNER UP of the IPIN 2017 Competition: Track1 〃Smartphone based〃"
+    }
+  ],
   "expert_feedback": null
 }
