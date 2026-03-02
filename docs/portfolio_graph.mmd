@@ -1,0 +1,24 @@
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	load_profile(load_profile)
+	build_star_sentence(build_star_sentence)
+	self_consistency(self_consistency)
+	build_portfolio(build_portfolio)
+	__fallback__(<p>__fallback__</p>)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> load_profile;
+	build_star_sentence --> self_consistency;
+	load_profile --> build_star_sentence;
+	self_consistency -.-> __fallback__;
+	self_consistency -.-> build_portfolio;
+	self_consistency -.-> build_star_sentence;
+	__fallback__ --> __end__;
+	build_portfolio --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
