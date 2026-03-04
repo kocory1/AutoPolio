@@ -6,7 +6,7 @@
 
 ---
 
-### 오늘 한 것
+###  한 것
 
 | 항목 | 내용 |
 |------|------|
@@ -30,3 +30,19 @@
 ---
 
 **레퍼런스:** `week1-github-oauth.md`, `docs/API_GitHub_Portfolio_Spec.md`, `docs/AUTOFOLIO_GitHub_OAuth_가이드.md`, `AUTOFOLIO_LangGraph_설계.md`
+
+---
+
+### 레포 코드 인식 전략(Contents API vs 클론) 실험 메모
+
+- 실험 스크립트: `scripts/repo_ingestion_strategy_experiment.py`
+- 실행: `GITHUB_OAUTH_ACCESS_TOKEN` 설정 후  
+  `poetry run python scripts/repo_ingestion_strategy_experiment.py`
+- 실행 시 AutoPolio 가상환경 활성화 필요: `cd AutoPolio && source .venv/bin/activate` 또는 `poetry shell`
+
+**기록 가이드 (실행 후 여기에 메모)**
+
+- [ ] 대상 레포, 브랜치, 파일 확장자 범위
+- [ ] Contents API 전략 결과: 대략적인 시간 / 파일 수 / 바이트 수 / rate-limit 체감
+- [ ] git clone 전략 결과: 대략적인 시간 / 파일 수 / 바이트 수 / 로컬 후처리 편의성
+- [ ] AutoFolio에서 **최종 선택한 전략**과 이유 (예: “초기 ingest 시에는 git clone, 이후 증분 동기화는 Contents API” 등)
