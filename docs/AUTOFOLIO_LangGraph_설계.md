@@ -1,6 +1,6 @@
 # Autofolio LangGraph 설계
 
-**문서 버전:** 0.6 (초안)  
+**문서 버전:** 0.7 (초안)  
 **목적:** Phase 1·2·3 오케스트레이션을 LangGraph로 설계. 1~2주 공통 설계 산출물.
 
 ---
@@ -15,7 +15,8 @@
 | 4 | **Inspector** | 3 | 초안, 전략, 에셋, (선택) 유저 수정본 | 보완 제안, Human-in-the-loop |
 
 - **문항**은 자소서 문항(채용처가 낸 질문)으로, **2번 전략 수립·3번 Writer**에서만 사용. 1번 포트폴리오 생성은 문항 없음.
-- Job Fit는 그래프 없이 단일 API(공고 임베딩 vs 프로필 임베딩 유사도)로 처리.
+- **전략 수립**은 별도 API로 노출하지 않음. 자소서 초안(draft) 요청 시 내부에서 전략 수립 그래프를 호출한 뒤 Writer로 이어지는 구조.
+- Job Fit는 그래프 없이 단일 API(User DB 프로필·임베딩 vs 공고 파싱 API 반환값 비교 → 점수)로 처리.
 
 ---
 
@@ -68,7 +69,8 @@ class PortfolioState(TypedDict, total=False):
 
 ## 3. 전략 수립 그래프 (2번)
 
-**용도:** **문항**(자소서 문항) + 공고 + 에셋 → 문항 유형 분류, 매칭 에셋 선정, Gap 분석, 전략 JSON 생성.
+**용도:** **문항**(자소서 문항) + 공고 + 에셋 → 문항 유형 분류, 매칭 에셋 선정, Gap 분석, 전략 JSON 생성.  
+**노출:** 별도 API 없음. 자소서 초안(draft) 요청 시 내부에서 이 그래프를 호출한 뒤 Writer로 이어짐.
 
 ### 3.1 노드·엣지
 
@@ -130,13 +132,13 @@ class StrategyState(TypedDict, total=False):
 ```
 [START] → load_context → retrieve_samples → generate_draft → format_output → [END]
                               ↑
-                    P1 합격 자소서 검색 API 호출
+                    합격 자소서 검색 모듈 호출 (별도 API 아님)
 ```
 
 | 노드 | 역할 | 입출력(State) |
 |------|------|----------------|
 | `load_context` | 전략·에셋·문항 로드, State 채우기 | 입력: `strategy`, `assets`, `question` |
-| `retrieve_samples` | **P1 합격 자소서 검색 API** 호출 (문항/회사/키워드) | 입력: `question`, (선택) `job_parsed` / 출력: `samples` |
+| `retrieve_samples` | **합격 자소서 검색 모듈** 호출 (문항/회사/키워드) — 내부 모듈, 대외 API 아님 | 입력: `question`, (선택) `job_parsed` / 출력: `samples` |
 | `generate_draft` | LLM으로 초안 생성 (전략+에셋+샘플 참고) | 출력: `draft` |
 | `format_output` | 글자수·형식 정리 | 출력: `draft` 최종 |
 
@@ -147,15 +149,15 @@ class WriterState(TypedDict, total=False):
     strategy: dict
     assets: list
     question: str
-    samples: list          # P1 검색 API 결과
+    samples: list          # 합격 자소서 검색 모듈 결과
     draft: str
     messages: list         # (선택) 대화 이력
 ```
 
-### 4.3 호출 API
+### 4.3 호출 모듈 (API 아님)
 
-- **P1 합격 자소서 검색 API**: 문항/회사/연도/키워드 → 유사 합격 자소서 목록.  
-  → 2주 차 API 스펙에서 요청/응답 형식 확정 필요.
+- **합격 자소서 검색 모듈**: 문항/회사/연도/키워드 → 유사 합격 자소서 목록.  
+  Writer 그래프 내부에서 **모듈 호출**로 사용. 대외 REST API로 노출할 필요 없음.
 
 ---
 
@@ -199,13 +201,13 @@ class InspectorState(TypedDict, total=False):
 
 ---
 
-## 6. 그래프가 호출하는 API 정리
+## 6. 그래프가 호출하는 API·모듈 정리
 
-| 호출 주체 | API | 제공(P1) | 비고 |
-|-----------|-----|----------|------|
-| Writer `retrieve_samples` | 합격 자소서 검색 (문항/회사/연도/키워드) | P1 | 요청/응답 스펙 2주 차 확정 |
-| 전략 `select_assets` | User 에셋/프로필 조회 | P1 | (선택) |
-| 포트폴리오 `load_profile` | User 프로필·에셋 조회 | P1 | (선택) |
+| 호출 주체 | 대상 | 제공 | 비고 |
+|-----------|------|------|------|
+| Writer `retrieve_samples` | 합격 자소서 검색 **모듈** (문항/회사/연도/키워드) | 내부 모듈 | 별도 API 노출 없음 |
+| 전략 `select_assets` | User 에셋/프로필 조회 | P1 API 또는 DB | (선택) |
+| 포트폴리오 `load_profile` | User 프로필·에셋 조회 | P1 API 또는 DB | (선택) |
 
 ---
 
@@ -227,3 +229,4 @@ class InspectorState(TypedDict, total=False):
 - 0.4: 검증 실패 시 재진입 시 **consistency_feedback** 전달, `build_star_sentence`가 피드백 반영해 재생성하도록 명시. State에 `consistency_feedback`, `star_retry_count` 추가, 재시도 상한으로 fallback 분기 명시.
 - 0.5: 1번 그래프 State 스키마 정리 — `user_id`, `profile`, `assets`, `star`, `is_hallucination`, `is_star`, `star_retry_count`, `portfolio`, `consistency_feedback`.
 - 0.6: 2번 그래프에 문항별 멀티에이전트 옵션(3.4) 추가 — 문항별 병렬 전략 수립, 공유 컨텍스트, aggregate 정리.
+- 0.7: 전략 수립 별도 API 없음(draft 시 내부 호출) 명시. Job Fit = User DB vs 공고 파싱 API 반환값. 합격 자소서 검색을 API → 모듈 호출로 변경.
