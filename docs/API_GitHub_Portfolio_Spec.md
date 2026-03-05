@@ -14,7 +14,7 @@
 | 인증 | GET | `/api/auth/github/login` | GitHub OAuth 시작(리다이렉트) |
 | 인증 | GET | `/api/auth/github/callback` | OAuth 콜백, 토큰 교환·세션 생성 |
 | 인증 | GET | `/api/auth/logout` | 로그아웃 |
-| 인증 | POST | `/api/auth/github/disconnect` | GitHub 연동 해제(토큰 삭제) |
+| 인증 | POST | `/api/auth/github/disconnect` | GitHub 연동 해제(토큰 삭제, **MVP 이후 TODO**) |
 | 유저 | GET | `/api/me` | 현재 로그인 유저 정보 |
 | 유저 | GET / PUT | `/api/user/selected-repos` | 선택 레포 목록 조회/저장 |
 | GitHub | GET | `/api/github/repos` | 로그인 유저 레포 목록 |
@@ -65,12 +65,13 @@
 - **응답**: `302` → 로그인 페이지 또는 `/`.
 - **에러**: 없음(세션 없어도 302).
 
-#### 1.4 `POST /api/auth/github/disconnect`
+#### 1.4 `POST /api/auth/github/disconnect` (MVP 이후 TODO)
 
-- **역할**: GitHub 연동 해제. DB에서 해당 유저의 GitHub access_token 삭제.
+- **역할**: GitHub 연동 해제. DB에서 해당 유저의 GitHub access_token 삭제.  
+  - **MVP에서는 구현하지 않고**, 로그아웃만 제공한다.
 - **요청**: 쿠키/세션.
-- **응답**: `200` + `{"ok": true}` 또는 `302` → 설정/대시보드.
-- **에러**: `401` 세션 없음.
+- **응답(향후 계획)**: `200` + `{"ok": true}` 또는 `302` → 설정/대시보드.
+- **에러(향후 계획)**: `401` 세션 없음.
 
 ---
 
@@ -124,6 +125,12 @@
 - **역할**: 로그인 유저의 GitHub 레포 목록 조회.
 - **요청 헤더**
   - 세션 쿠키 또는 `Authorization: Bearer <app-session-token>`.
+- **쿼리 파라미터**
+  - `per_page`: integer, 옵션, 기본=30 — 페이지당 레포 수.
+  - `page`: integer, 옵션, 기본=1 — 페이지 번호(1-base).
+  - `sort`: string, 옵션, 기본=`pushed` — `created` \| `updated` \| `pushed` \| `full_name`.
+  - `direction`: string, 옵션, 기본=`desc` — `asc` \| `desc`.
+  - `type`: string, 옵션, 기본=`owner` — `all` \| `owner` \| `member`.
 - **응답 200 예시**
 
 ```json
