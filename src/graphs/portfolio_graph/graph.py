@@ -6,7 +6,6 @@ from langgraph.graph import END, START, StateGraph
 
 from .edge import after_self_consistency
 from .node import (
-    __fallback__,
     build_portfolio,
     build_star_sentence,
     load_profile,
@@ -21,8 +20,8 @@ def build_portfolio_graph():
     플로우:
       START → load_profile → build_star_sentence → self_consistency
         → (통과) build_portfolio → END
-        → (실패 & retry < N) build_star_sentence (재진입)
-        → (실패 & retry >= N) __fallback__ → END
+        → (실패 & retry < 3) build_star_sentence (피드백 프롬프트 반영 재생성)
+        → (실패 & retry >= 3) build_portfolio → END
     """
     graph = StateGraph(PortfolioState)
 
@@ -30,7 +29,6 @@ def build_portfolio_graph():
     graph.add_node("build_star_sentence", build_star_sentence)
     graph.add_node("self_consistency", self_consistency)
     graph.add_node("build_portfolio", build_portfolio)
-    graph.add_node("__fallback__", __fallback__)
 
     graph.add_edge(START, "load_profile")
     graph.add_edge("load_profile", "build_star_sentence")
@@ -41,11 +39,9 @@ def build_portfolio_graph():
         {
             "build_portfolio": "build_portfolio",
             "build_star_sentence": "build_star_sentence",
-            "__fallback__": "__fallback__",
         },
     )
     graph.add_edge("build_portfolio", END)
-    graph.add_edge("__fallback__", END)
 
     return graph.compile()
 
