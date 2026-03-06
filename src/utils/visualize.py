@@ -2,8 +2,8 @@
 
 import random
 from dataclasses import dataclass
+from pathlib import Path
 
-from IPython.display import Image, display
 from langgraph.graph.state import CompiledStateGraph
 
 
@@ -23,9 +23,7 @@ class NodeStyles:
 def visualize_graph(graph, xray=False, ascii=False):
     """
     CompiledStateGraph 객체를 시각화하여 표시합니다.
-
-    이 함수는 주어진 그래프 객체가 CompiledStateGraph 인스턴스인 경우
-    해당 그래프를 Mermaid 형식의 PNG 이미지로 변환하여 표시합니다.
+    Jupyter 환경에서 IPython.display 사용. 그 외에는 ASCII 출력.
 
     Args:
         graph: 시각화할 그래프 객체. CompiledStateGraph 인스턴스여야 합니다.
@@ -34,6 +32,8 @@ def visualize_graph(graph, xray=False, ascii=False):
     """
     if not ascii:
         try:
+            from IPython.display import Image, display
+
             if isinstance(graph, CompiledStateGraph):
                 display(
                     Image(
@@ -43,15 +43,47 @@ def visualize_graph(graph, xray=False, ascii=False):
                         )
                     )
                 )
+        except ImportError:
+            print(graph.get_graph(xray=xray).draw_ascii())
         except Exception as e:
-            print(f"그래프 시각화 실패 (추가 종속성 필요): {e}")
-            print("ASCII로 그래프 표시:")
+            print(f"그래프 시각화 실패: {e}")
             try:
                 print(graph.get_graph(xray=xray).draw_ascii())
             except Exception as ascii_error:
                 print(f"ASCII 표시도 실패: {ascii_error}")
     else:
         print(graph.get_graph(xray=xray).draw_ascii())
+
+
+def save_graph_png(graph, output_path: str | Path, xray: bool = False) -> bool:
+    """CompiledStateGraph를 PNG 파일로 저장.
+
+    Args:
+        graph: CompiledStateGraph 인스턴스
+        output_path: 저장 경로 (str 또는 Path)
+        xray: 그래프 내부 상태 표시 여부
+
+    Returns:
+        성공 시 True, 실패 시 False
+    """
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if isinstance(graph, CompiledStateGraph):
+            graph.get_graph(xray=xray).draw_mermaid_png(
+                output_file_path=str(path),
+                background_color="white",
+                node_colors=NodeStyles(),
+            )
+            print("PNG written to", path)
+            return True
+    except Exception as e:
+        print(f"PNG export failed (network required for Mermaid.ink API): {e}")
+        try:
+            print(graph.get_graph(xray=xray).draw_ascii())
+        except Exception as ascii_error:
+            print(f"ASCII 표시도 실패: {ascii_error}")
+    return False
 
 
 def generate_random_hash():

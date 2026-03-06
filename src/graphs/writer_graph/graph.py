@@ -4,6 +4,8 @@ from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
 
+from src.utils.visualize import save_graph_png
+
 from .edge import after_load_assets, after_retrieve_samples, after_self_consistency
 from .node import format_output, generate_draft, load_assets, retrieve_samples, self_consistency
 from .state import WriterState
@@ -54,10 +56,4 @@ def build_writer_graph():
 if __name__ == "__main__":
     # 프로젝트 루트에서 실행: python -m src.graphs.writer_graph.graph
     compiled = build_writer_graph()
-    out_png = Path("docs/writer_graph.png")
-    out_png.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        compiled.get_graph().draw_mermaid_png(output_file_path=str(out_png))
-        print("PNG written to", out_png)
-    except Exception as e:
-        print("PNG export failed (network required for Mermaid.ink API):", e)
+    save_graph_png(compiled, Path("docs/writer_graph.png"))

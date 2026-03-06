@@ -3,7 +3,8 @@
 from .visualize import (
     NodeStyles,
     generate_random_hash,
+    save_graph_png,
     visualize_graph,
 )
 
-__all__ = ["NodeStyles", "visualize_graph", "generate_random_hash"]
+__all__ = ["NodeStyles", "save_graph_png", "visualize_graph", "generate_random_hash"]

@@ -4,6 +4,8 @@ from pathlib import Path
 
 from langgraph.graph import END, START, StateGraph
 
+from src.utils.visualize import save_graph_png
+
 from .edge import after_self_consistency
 from .node import (
     build_portfolio,
@@ -48,12 +50,5 @@ def build_portfolio_graph():
 
 if __name__ == "__main__":
     # 프로젝트 루트에서 실행: python -m src.graphs.portfolio_graph.graph
-    # 컴파일된 그래프를 PNG로 저장 (노드 아님, main 전용)
     compiled = build_portfolio_graph()
-    out_png = Path("docs/portfolio_graph.png")
-    out_png.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        compiled.get_graph().draw_mermaid_png(output_file_path=str(out_png))
-        print("PNG written to", out_png)
-    except Exception as e:
-        print("PNG export failed (network required for Mermaid.ink API):", e)
+    save_graph_png(compiled, Path("docs/portfolio_graph.png"))
