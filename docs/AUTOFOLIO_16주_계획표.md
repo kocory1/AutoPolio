@@ -56,7 +56,7 @@ P1 (데이터) ── 제공 ──►  P2 (서비스 · LangGraph)
 **Writer 그래프**
 - 노드: `retrieve_samples`(합격 자소서 검색) → `load_assets`(유저 DB 에셋 조회) → `generate_draft` → `self_consistency` → `format_output`
 - State: `user_id`, `assets`, `question`, `max_chars`, `samples`, `draft`, `messages`(선택)
-- 엣지: `retrieve_samples`·`load_assets` 검증/조회 실패 시 END, 통과 시 선형.
+- 엣지: `retrieve_samples` 검증 실패 시만 END (samples 못 찾아도 load_assets 진행). `load_assets` 조회 실패 시 END.
 
 **Inspector 그래프**
 - 노드: `load_draft` → `analyze` → `suggest` → Human 입력 대기 → `re_inspect`(round < N) 또는 `end`

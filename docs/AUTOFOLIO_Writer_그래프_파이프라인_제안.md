@@ -37,7 +37,7 @@
 
 | 순서  | 노드                 | 역할                                               | 입력(State)                                                                   | 출력(State)                                                                |
 | --- | ------------------ | ------------------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| 1   | `retrieve_samples` | **진입 시 검증** (question, max_chars). 합격 자소서 검색 모듈 호출 | `question`, `max_chars`, `job_parsed`                                       | (통과) `samples` / (실패) `error` → END                                         |
+| 1   | `retrieve_samples` | **진입 시 검증** (question, max_chars). 합격 자소서 검색. 못 찾아도 load_assets 진행 | `question`, `max_chars`, `job_parsed`                                       | (통과) `samples` / (검증 실패만) `error` → END                                         |
 | 2   | `load_assets`      | **유저 DB**에서 에셋 조회. 문항/공고 기반 관련 에셋 선별 | `user_id`, `question`, `job_parsed`                                         | (통과) `assets` / (실패) `error` → END                                        |
 | 3   | `generate_draft`   | LLM 초안 생성. **재진입 시** `consistency_feedback` 프롬프트 반영 | `assets`, `samples`, `question`, `job_parsed`, (재진입) `consistency_feedback` | `draft`                                                                  |
 | 4   | `self_consistency` | **환각 체크**. 실패 시 피드백 기록 → generate_draft 재호출 | `draft`, `assets`, `draft_retry_count`                                      | `is_hallucination`, (실패 시) `consistency_feedback`, `draft_retry_count`+1 |
@@ -91,7 +91,7 @@ class WriterState(TypedDict, total=False):
 
 - **역할:** **진입 시** 필수 필드(`question`, `max_chars`) 검증. 통과 시 합격 자소서 검색 **모듈** 호출. (에셋은 load_assets에서 이후 조회)
 - **입력:** `question`, `max_chars`, `job_parsed` (State에서 읽음. `job_parsed`는 선택)
-- **출력:** (통과) `samples` / (실패) `error` → END
+- **출력:** (통과) `samples` / (검증 실패만) `error` → END
 - **검증:** `question`, `max_chars` 없으면 `error` 설정 후 반환. 조건 엣지로 END 분기.
 - **검색:** 검증 통과 시 문항/회사/연도/키워드로 유사 합격 자소서 목록 조회.
 - **출력:** `samples` (list of dict: 문항, 답변, 회사, 연도 등)
@@ -108,7 +108,7 @@ class WriterState(TypedDict, total=False):
       """문항/회사/연도/키워드 → 유사 합격 자소서 목록."""
   ```
 - **대외 API:** 없음. Writer 그래프 내부에서만 호출.
-- **samples가 빈 리스트일 때:** 그대로 진행. `generate_draft`는 assets만으로도 초안 생성 가능. 샘플은 "참고"용이므로 필수 아님. `generate_draft` 프롬프트에서 `samples`가 비어 있으면 "참고 샘플 없음. assets에만 의존해 작성"을 명시하면 됨. (검색 모듈 오류 vs 실제 매칭 없음 구분은 검색 모듈 책임. 빈 리스트 = 매칭 없음으로 단순 처리.)
+- **samples 못 찾아도 load_assets로 진행:** 검색 결과 없음(빈 리스트) 또는 검색 모듈 에러 시에도 `error` 설정하지 않음. `samples=[]`로 load_assets → generate_draft 진행. `generate_draft`는 assets만으로도 초안 생성 가능.
 
 ### 4.2 load_assets
 
@@ -156,8 +156,8 @@ class WriterState(TypedDict, total=False):
 | From             | To               | 조건                                              |
 | ---------------- | ---------------- | ----------------------------------------------- |
 | START            | retrieve_samples | -                                               |
-| retrieve_samples | load_assets      | (통과 시)                                        |
-| retrieve_samples | END              | (검증 실패 시. `error` 설정)                       |
+| retrieve_samples | load_assets      | (검증 통과 시. samples 못 찾아도 진행)              |
+| retrieve_samples | END              | (검증 실패 시만. `error` 설정)                       |
 | load_assets     | generate_draft   | (통과 시)                                        |
 | load_assets     | END              | (조회 실패 시. `error` 설정)                       |
 | generate_draft   | self_consistency | -                                               |

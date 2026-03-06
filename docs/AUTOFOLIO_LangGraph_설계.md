@@ -90,7 +90,7 @@ class PortfolioState(TypedDict, total=False):
 
 | 노드 | 역할 | 입출력(State) |
 |------|------|----------------|
-| `retrieve_samples` | 진입 시 검증 + 합격 자소서 검색 모듈 호출 | 입력: `question`, `max_chars`, `job_parsed` / 출력: `samples` 또는 `error` |
+| `retrieve_samples` | 진입 시 검증 + 합격 자소서 검색. 못 찾아도 load_assets 진행 | 입력: `question`, `max_chars`, `job_parsed` / 출력: `samples` (검증 실패만 `error`) |
 | `load_assets` | 유저 DB에서 에셋 조회. 문항/공고 기반 선별 | 입력: `user_id`, `question`, `job_parsed` / 출력: `assets` 또는 `error` |
 | `generate_draft` | LLM 초안 생성. **재진입 시** `consistency_feedback` 프롬프트 반영 | 입력: `assets`, `samples`, `question`, `job_parsed`, (재진입) `consistency_feedback` / 출력: `draft` |
 | `self_consistency` | 환각 체크. 실패 시 `consistency_feedback`, `draft_retry_count` 증가 | 입력: `draft`, `assets` / 출력: `is_hallucination`, `consistency_feedback`, `draft_retry_count` |

@@ -7,11 +7,11 @@ def retrieve_samples(state: WriterState) -> dict:
     """진입 시 검증 + 합격 자소서 검색 모듈 호출.
 
     입력: question, max_chars, job_parsed (assets 불필요 — load_assets에서 이후 조회)
-    출력: (통과) samples / (실패) error → END
+    출력: (통과) samples / (검증 실패만) error → END
     """
     # TODO: question, max_chars 필수 검증. 없으면 error 설정 후 반환
     # TODO: 검증 통과 시 retrieve_passed_cover_letters(question, company_name, ...) 호출
-    # TODO: samples = list of dict (문항, 답변, 회사, 연도 등)
+    # TODO: samples 못 찾아도(빈 리스트/검색 모듈 에러) error 설정 안 함 → load_assets로 진행
     return {"samples": state.get("samples") or []}
 
 
