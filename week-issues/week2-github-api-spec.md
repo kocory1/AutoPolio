@@ -21,6 +21,27 @@
 **로컬 실습 스크립트:** `github_oauth_local_test.py`(OAuth 플로우), `github_repo_describe_practice.py`(레포+LLM 설명), `github_code_and_commits_experiment.py`(파일 목록·코드 읽기·내 커밋만).  
 실행: `GITHUB_OAUTH_ACCESS_TOKEN` 설정 후 `poetry run python scripts/...`
 
+#### PR 피드백 반영 (2025-03-09)
+
+- **문서 구조 개편**
+  - `docs/API_GitHub_Spec.md`: GitHub 전용 API 명세를 PR 피드백 기준으로 재정리  
+    - `/api/github/repos/select` 제거, `/api/user/selected-repos`(GET/PUT) 추가  
+    - `/api/github/repos` 쿼리 파라미터에서 `page`, `per_page`만 노출 (나머지는 서버 고정값)  
+    - 비동기 임베딩 상태 조회용 `GET /api/github/repos/{repo_id}/embedding/status`(5.2) 추가
+  - `docs/API_Service_Spec.md`: Job/자소서/포트폴리오 서비스 API 명세 재정렬  
+    - Job 파싱 결과 **저장 안 함** 기준으로 `job_id` 제거, `parsed_job` 객체를 직접 body로 받는 방식으로 통일 (`/api/job-fit`, `/api/cover-letter/draft`, `/api/portfolio/generate`)  
+    - `POST /api/user/documents` 추가 (이력서/포트폴리오 문서 업로드 → OCR → VectorDB 저장)  
+    - `cover-letter/inspect` 요청에 `question_text` 필드 추가
+  - `docs/API_Auth_Spec.md`: GitHub 로그인/콜백/로그아웃/`/api/me`를 별도 인증 명세서로 분리  
+  - `docs/API_Common.md`: 공통 요청 형식, 공통 에러 코드, `score_label` 기준, 전체 API 사용 시퀀스를 한 곳에 모은 공통 문서 추가
+
+- **형식/품질 정리**
+  - 세 API 명세서(`API_Auth_Spec.md`, `API_GitHub_Spec.md`, `API_Service_Spec.md`)의 모든 엔드포인트에 대해:  
+    - Request Syntax(curl), Request Header 표, Request Element 표, Response(성공 JSON + 에러 표)를 일관되게 채움  
+    - `"..."`, `등` 같은 모호한 표현 제거, 모든 필드는 타입/설명까지 구체적으로 명시  
+    - 공통 에러는 각 엔드포인트 에러 표 하단에서 `API_Common.md` 의 공통 규칙을 참조하도록 통일  
+    - `score_label` 사용 엔드포인트(job-fit, inspect)는 공통 규칙의 기준표를 참조하도록 문구 추가
+
 ---
 
 ### 앞으로 할 것
