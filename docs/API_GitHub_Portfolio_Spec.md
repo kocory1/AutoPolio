@@ -14,13 +14,11 @@
 | 인증 | GET | `/api/auth/github/login` | GitHub OAuth 시작(리다이렉트) |
 | 인증 | GET | `/api/auth/github/callback` | OAuth 콜백, 토큰 교환·세션 생성 |
 | 인증 | GET | `/api/auth/logout` | 로그아웃 |
-| 인증 | POST | `/api/auth/github/disconnect` | GitHub 연동 해제(토큰 삭제) |
 | 유저 | GET | `/api/me` | 현재 로그인 유저 정보 |
 | 유저 | GET / PUT | `/api/user/selected-repos` | 선택 레포 목록 조회/저장 |
 | GitHub | GET | `/api/github/repos` | 로그인 유저 레포 목록 |
 | GitHub | GET | `/api/github/repos/{id}` | 레포 단건 상세 |
-| GitHub | GET | `/api/github/repos/{id}/files` | 레포 파일/폴더 트리 |
-| GitHub | GET | `/api/github/repos/{id}/contents` | 특정 파일 raw 내용(코드/문서 읽기) |
+| GitHub | GET | `/api/github/repos/{id}/tree` | 레포 파일/폴더 트리 또는 특정 파일 raw 내용(`?path=`) |
 | GitHub | GET | `/api/github/repos/{id}/commits` | 커밋 목록(author 필터 가능) |
 | GitHub | POST | `/api/github/repos/{id}/embedding` | 임베딩 생성/갱신 요청(비동기) |
 
@@ -65,12 +63,9 @@
 - **응답**: `302` → 로그인 페이지 또는 `/`.
 - **에러**: 없음(세션 없어도 302).
 
-#### 1.4 `POST /api/auth/github/disconnect`
+#### 1.4 연동 해제
 
-- **역할**: GitHub 연동 해제. DB에서 해당 유저의 GitHub access_token 삭제.
-- **요청**: 쿠키/세션.
-- **응답**: `200` + `{"ok": true}` 또는 `302` → 설정/대시보드.
-- **에러**: `401` 세션 없음.
+- 제공하지 않음.
 
 ---
 
@@ -187,7 +182,7 @@
   - `403 FORBIDDEN`: 접근 권한 없는 레포.
   - `502 BAD_GATEWAY`: GitHub API 실패.
 
-#### 3.4 `GET /api/github/repos/{id}/files`
+#### 3.4 `GET /api/github/repos/{id}/tree`
 
 - **역할**: 레포 파일/디렉터리 트리 조회 (임베딩·포트폴리오 대상 선택에 사용).
 - **쿼리**
@@ -207,14 +202,14 @@
 
 - **에러**: `403`, `404`, `502`.
 
-#### 3.5 `GET /api/github/repos/{id}/contents`
+#### 3.5 `GET /api/github/repos/{id}/tree?path=...`
 
 - **역할**: 특정 **파일**의 raw 내용 조회(코드/문서 읽기). `AUTOFOLIO_임베딩전략.md`의 Leaf 레벨·RAPTOR 수집에 사용.
 - **쿼리**
   - `path`: string (필수). 예: `README.md`, `src/main.py`.
-- **응답**: `200` + 본문은 **텍스트** (Content-Type: text/plain 또는 application/octet-stream). 또는 JSON으로 `{"content": "base64..."}` 디코딩해서 사용.
+- **응답**: `200` + 본문은 **텍스트**(Content-Type: text/plain 또는 application/octet-stream) 또는 JSON(`{"content": "base64..."}`).
 - **에러**: `400` path 누락, `404` 파일 없음, `403` 권한 없음, `502` GitHub 오류.
-- **비고**: 디렉터리 path면 트리 목록 반환(동일 시 `GET .../files?path=` 로 통일 가능).
+- **비고**: 디렉터리 path면 트리 목록 반환.
 
 ---
 
@@ -257,7 +252,7 @@
 | 구분 | 파일 | 역할 | 실서비스에서의 위치 |
 |------|------|------|---------------------|
 | 로컬 실험 | `scripts/github_oauth_local_test.py` | 브라우저 열어서 OAuth 플로우 전체를 내 PC에서 테스트 | FastAPI의 `/api/auth/github/login`, `/callback`으로 기능 이전 |
-| 로컬 실험 | `scripts/github_repo_describe_practice.py` | access_token으로 레포/README 읽고 LLM으로 설명 생성 | `/api/github/repos`, `/api/github/repos/{id}/files` + LangGraph/Writer 그래프 조합으로 대체 |
+| 로컬 실험 | `scripts/github_repo_describe_practice.py` | access_token으로 레포/README 읽고 LLM으로 설명 생성 | `/api/github/repos`, `/api/github/repos/{id}/tree` + LangGraph/Writer 그래프 조합으로 대체 |
 | 로컬 실험 | `scripts/github_code_and_commits_experiment.py` | README 말고 **실제 코드 파일** 내용 읽기, **타인 레포**에서 `author=본인` 으로 내 커밋만 조회 가능 여부 검증 | 코드 읽기 → Contents API(raw), 내 커밋만 → `/repos/{o}/{r}/commits?author=login` 로 서비스 API에 반영 |
 | 서비스 유틸 | `src/github_embedding/login/__init__.py` | GitHub OAuth·레포/커밋/트리 조회 함수 모음 | FastAPI 라우터에서 직접 호출하는 “서비스 계층” 유틸 |
 | 서비스 유틸(계획) | `src/github_embedding/embedding/` | 트리→청크, 요약·임베딩 생성 | 임베딩 생성 API와 LangGraph 노드에서 사용 |
