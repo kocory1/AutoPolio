@@ -1,6 +1,6 @@
 # Autofolio DB 스키마 설계
 
-**문서 버전:** 1.6  
+**문서 버전:** 1.7  
 **기준:** [AUTOFOLIO_RAG_파이프라인_핵심.md](AUTOFOLIO_RAG_파이프라인_핵심.md), [AUTOFOLIO_API_스펙.md](AUTOFOLIO_API_스펙.md), [AUTOFOLIO_합격자소서_벡터DB_스키마.md](AUTOFOLIO_합격자소서_벡터DB_스키마.md)
 
 ---
@@ -9,7 +9,7 @@
 
 | 저장소 | 용도 |
 |--------|------|
-| **SQLite** | users, cover_letters, jobs, selected_repos, portfolios |
+| **SQLite** | users, cover_letters, jobs, selected_repos, asset_hierarchy, portfolios |
 | **ChromaDB** | passed_cover_letters (합격 자소서 문항 유사 검색) |
 | **ChromaDB** | user_assets_{user_id} (RAPTOR, Job Fit, Writer/Inspector 에셋 조회) |
 
@@ -73,7 +73,20 @@ Writer 초안·Inspector 재첨삭 이력 저장. `users.id` FK.
 | `repo_full_name` | TEXT | owner/repo |
 | `created_at` | DATETIME | |
 
-### 2.5 portfolios (포트폴리오)
+### 2.5 asset_hierarchy (에셋 계층)
+
+RAPTOR 임베딩 시 파일·폴더가 어느 폴더에 속하는지 표현. 자기 참조 테이블. `selected_repos.id` FK.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `id` | TEXT PK | 노드 식별자 (예: `owner/repo/src/auth/login.py`. ChromaDB User Asset id와 동일 권장) |
+| `selected_repo_id` | INTEGER FK | selected_repos.id |
+| `type` | TEXT | `code` \| `folder` \| `project` |
+| `parent_id` | TEXT FK | 같은 테이블의 id. 루트(project) 노드면 NULL |
+
+- **채우는 시점:** RAPTOR 임베딩 파이프라인에서 트리 수집 직후. 레포 재인덱싱 시 해당 `selected_repo_id` 행만 삭제 후 재생성.
+
+### 2.6 portfolios (포트폴리오)
 
 유저별 포트폴리오 메타데이터 및 생성 결과물. `users.id` FK.
 
@@ -187,6 +200,8 @@ erDiagram
     users ||--o{ cover_letters : has
     users ||--o{ selected_repos : has
     users ||--o{ portfolios : has
+    selected_repos ||--o{ asset_hierarchy : has
+    asset_hierarchy ||--o{ asset_hierarchy : parent
     jobs ||--o{ cover_letters : "job_id optional"
 
     users {
@@ -230,6 +245,13 @@ erDiagram
         datetime created_at
     }
 
+    asset_hierarchy {
+        text id PK
+        int selected_repo_id FK
+        text type
+        text parent_id FK
+    }
+
     portfolios {
         text id PK
         text user_id FK
@@ -250,6 +272,7 @@ users
   │       └── job_id → jobs (선택)
   │
   ├── selected_repos (user_id FK)
+  │       └── asset_hierarchy (selected_repo_id FK, parent_id 자기참조)
   │
   └── portfolios (user_id FK)
 
@@ -277,3 +300,4 @@ jobs (독립)
 - 1.4: portfolios.content 컬럼 추가 (생성 결과물 저장).
 - 1.5: Mermaid ER 다이어그램 추가 (시각화).
 - 1.6: user_cover_letters→cover_letters, user_selected_repos→selected_repos. User Asset 스키마 통합 (type, metadata, id/path).
+- 1.7: asset_hierarchy 테이블 추가 (selected_repo_id FK, type, parent_id 자기참조). RAPTOR 계층 정보.
