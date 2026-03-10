@@ -1,22 +1,26 @@
 # Autofolio 16주 팀 계획표 (2인 분담)
 
-**팀 구성:** 2명 (P1 + P2)  
-**기간:** 16주  
-**기준:** AUTOFOLIO_파이프라인.md Phase 1~3, **LangGraph** 기반 오케스트레이션, API·Graph 설계 → 구현 순서  
-**참고:** 8주차는 시험기간.
+**문서 버전:** 1.6  
+**기준:** [AUTOFOLIO_파이프라인.md](AUTOFOLIO_파이프라인.md), [AUTOFOLIO_LangGraph_설계.md](AUTOFOLIO_LangGraph_설계.md)
 
 ---
 
-## 1. 분담 구조 개요
+## 1. 개요
 
-### 1.1 역할 정의
+2인 분담(P1 데이터·파이프라인, P2 서비스·LangGraph). 16주, Phase 1~3. 8주차 시험기간.
+
+---
+
+## 2. 분담 구조 개요
+
+### 2.1 역할 정의
 
 | 역할 | 담당 축 | 담당 영역 요약 |
 |------|---------|----------------|
 | **P1** | **데이터·파이프라인** | 이력서/합격 자소서 DB, Vector DB, RAPTOR, 임베딩, Asset 생성, 배치, Retrieval |
 | **P2** | **서비스·연동·LangGraph** | GitHub OAuth, 채용 공고 파싱, Job Fit, Writer/Inspector LangGraph 설계·구현, Human-in-the-loop |
 
-### 1.2 설계 공통 → 구현 분담
+### 2.2 설계 공통 → 구현 분담
 
 - **1~2주 (공통):** API 설계와 LangGraph 설계를 함께 진행.
   - API: Phase 1~3 엔드포인트·스키마·Provider(P1)–Consumer(P2) 정리.
@@ -24,34 +28,34 @@
 - **3주~ (분담):** P1은 데이터/검색 모듈·저장소 구현, P2는 OAuth·Job Fit·그래프 구현.
 - **연동:** 설계 단계에서 P1 제공 API·모듈 ↔ 그래프 노드 인터페이스를 맞춰 재작업 최소화.
 
-### 1.3 의존성 방향
+### 2.3 의존성 방향
 
 ```
 P1 (데이터) ── 제공 ──►  P2 (서비스 · LangGraph)
   · 합격 자소서 검색 모듈     · Writer 그래프: retrieve_samples·load_assets 노드에서 검색·에셋 조회 (API 아님)
   · User 프로필/임베딩       · Job Fit API가 프로필·공고 파싱 결과 비교
-  · RAPTOR/에셋 저장        · Writer/Inspector 그래프가 에셋 조회
+  · RAPTOR/에셋 저장        · Writer/Inspector 그래프가 에셋·합격 자소서 조회
 ```
 
 ---
 
-## 2. LangGraph·Graph 설계 (공통 설계)
+## 3. LangGraph·Graph 설계 (공통 설계)
 
 오케스트레이션을 LangGraph로 두고, Portfolio/Writer/Inspector 흐름을 그래프로 설계·구현한다.  
 `AUTOFOLIO_LangGraph_설계.md`와 `AUTOFOLIO_API_스펙.md`에 반영한다.
 
-### 2.1 그래프 목록 및 담당
+### 3.1 그래프 목록 및 담당
 
 | 그래프 | 용도 | State 핵심 필드 | 담당 | 비고 |
 |--------|------|------------------|------|------|
 | **포트폴리오 그래프** | User 프로필·에셋 → STAR → 포트폴리오 생성 | `profile`, `assets`, `star`, `portfolio` | P2 | Phase 1 |
 | **Writer 그래프** | 문항 + 합격 샘플 → 유저 DB(에셋) → 자소서 초안 | `user_id`, `assets`, `question`, `samples`, `draft` | P2 | Phase 3 |
-| **Inspector 그래프** | 초안 + 에셋 → 보완 제안, Human-in-the-loop | `draft`, `assets`, `suggestions`, `user_edited` | P2 | Phase 3 |
+| **Inspector 그래프** | 초안 + 에셋·합격 샘플(무조건 재조회) → 보완 제안, Human-in-the-loop | `draft`, `assets`, `samples`, `suggestions`, `user_edited`, `round` | P2 | Phase 3 |
 
 - **전략 수립 그래프는 제외**를 기준으로 한다.
 - Job Fit는 **User DB**(프로필·임베딩) vs **공고 파싱 API 반환값** 비교 후 점수 반환하는 단일 API로 처리.
 
-### 2.2 그래프별 노드·엣지 (설계 초안)
+### 3.2 그래프별 노드·엣지 (설계 초안)
 
 **Writer 그래프**
 - 노드: `retrieve_samples`(합격 자소서 검색) → `load_assets`(유저 DB 에셋 조회) → `generate_draft` → `self_consistency` → `format_output`
@@ -59,13 +63,13 @@ P1 (데이터) ── 제공 ──►  P2 (서비스 · LangGraph)
 - 엣지: `retrieve_samples` 검증 실패 시만 END (samples 못 찾아도 load_assets 진행). `load_assets` 조회 실패 시 END.
 
 **Inspector 그래프**
-- 노드: `load_draft` → `analyze` → `suggest` → Human 입력 대기 → `re_inspect`(round < N) 또는 `end`
-- State: `draft`, `assets`, `suggestions`, `user_edited`, `round`
-- 엣지: `suggest` → Human → `re_inspect` / `end`.
+- 노드: `load_draft`(무조건 에셋·합격 샘플 재조회) → `analyze` → `suggest` → Human 입력 대기 → `re_inspect`(round < N) → `load_draft` → ... 또는 `end`
+- State: `draft`, `assets`, `samples`, `suggestions`, `user_edited`, `round`
+- 엣지: `suggest` → Human → `re_inspect` / `end`. 재호출 시 `re_inspect` → `load_draft`.
 
 ---
 
-## 3. 주차별 계획 (16주)
+## 4. 주차별 계획 (16주)
 
 ### Phase 0: 설계 공통 (1~2주)
 
@@ -105,10 +109,10 @@ P1 (데이터) ── 제공 ──►  P2 (서비스 · LangGraph)
 
 ---
 
-## 4. API 설계 시 분담 가이드
+## 5. API 설계 시 분담 가이드
 
 - **P1 제공 / P2 소비**
-  - 합격 자소서 검색 모듈 (대외 API 노출 없이 Writer 내부 호출)
+  - 합격 자소서 검색 모듈 (대외 API 노출 없이 Writer·Inspector 내부 호출)
   - User 프로필/임베딩 저장·조회
 - **P2 제공**
   - GitHub OAuth callback, 토큰·레포 목록·선택 레포 API
@@ -118,7 +122,7 @@ P1 (데이터) ── 제공 ──►  P2 (서비스 · LangGraph)
 
 ---
 
-## 5. 주간 루틴 (권장)
+## 6. 주간 루틴 (권장)
 
 - 주 1회 동기화: 목표·진행률·블로커 공유
 - API·Graph 변경 시 문서 동시 업데이트
@@ -126,7 +130,7 @@ P1 (데이터) ── 제공 ──►  P2 (서비스 · LangGraph)
 
 ---
 
-## 6. 산출물 체크리스트 (16주 종료 시)
+## 7. 산출물 체크리스트 (16주 종료 시)
 
 - [ ] API 설계 문서(Phase 1~3 엔드포인트·스키마)
 - [ ] LangGraph 설계 문서(Portfolio/Writer/Inspector)
@@ -139,10 +143,20 @@ P1 (데이터) ── 제공 ──►  P2 (서비스 · LangGraph)
 
 ---
 
-## 7. 문서 이력
+## 8. 문서 관계
+
+- 파이프라인: [AUTOFOLIO_파이프라인.md](AUTOFOLIO_파이프라인.md)
+- LangGraph 설계: [AUTOFOLIO_LangGraph_설계.md](AUTOFOLIO_LangGraph_설계.md)
+- API 스펙: [AUTOFOLIO_API_스펙.md](AUTOFOLIO_API_스펙.md)
+
+---
+
+## 9. 문서 이력
 
 - 1.0: 16주 2인 분담 계획표 초안.
 - 1.1: LangGraph 기반 흐름 반영.
 - 1.2: API 설계·LangGraph 설계 공통 진행 구조로 정리.
 - 1.3 (2026-03-04): 전략 수립 그래프 제외 기준으로 전면 정리. 8주차 플랜 삭제.
 - 1.4 (2026-03-04): 8주차 시험기간 명시.
+- 1.5: Inspector 그래프 §3.1 용도·State(samples, round) 반영. §2.3 의존성(에셋·합격 자소서 조회) 수정.
+- 1.6: §5 P1 제공 - 합격 자소서 검색 모듈 Writer·Inspector 내부 호출로 수정.

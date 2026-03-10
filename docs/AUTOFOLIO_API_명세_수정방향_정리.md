@@ -1,11 +1,17 @@
 # Autofolio API 명세·수정 방향 정리
 
 **문서 버전:** 1.0  
-**최종 정리일:** 2026-03-04
+**기준:** [AUTOFOLIO_기획서.md](AUTOFOLIO_기획서.md), [AUTOFOLIO_LangGraph_설계.md](AUTOFOLIO_LangGraph_설계.md)
 
 ---
 
-## 1. 반영한 수정 방향
+## 1. 개요
+
+API 명세 수정 방향 정리. 전략 수립 제외, 채용공고 6가지 추출, 합격 자소서 내부 모듈, Job Fit 등 결정 사항 반영.
+
+---
+
+## 2. 반영한 수정 방향
 
 | 항목 | 수정 방향 | 반영 문서 |
 |------|-----------|-----------|
@@ -18,7 +24,7 @@
 
 ---
 
-## 2. API 명세 요약 (수정 반영 후)
+## 3. API 명세 요약 (수정 반영 후)
 
 - **인증:** GET /api/auth/github/login, callback, GET /api/auth/logout.
 - **유저:** GET /api/me, GET·PUT /api/user/selected-repos, POST /api/user/documents (PDF·PPT 업로드 → OCR·처리 → VectorDB 저장).
@@ -31,6 +37,13 @@
 
 ---
 
-## 3. 문서 이력
+## 4. 문서 관계
+
+- API 스펙: [AUTOFOLIO_API_스펙.md](AUTOFOLIO_API_스펙.md)
+- LangGraph 설계: [AUTOFOLIO_LangGraph_설계.md](AUTOFOLIO_LangGraph_설계.md)
+
+---
+
+## 5. 문서 이력
 
 - 1.0 (2026-03-04): 수정 방향 반영, API 명세 요약 정리.
