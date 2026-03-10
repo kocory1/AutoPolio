@@ -1,13 +1,17 @@
-## GitHub OAuth & 포트폴리오 API 명세 (초안)
+# GitHub OAuth & 포트폴리오 API 명세 (초안)
 
-이 문서는 RCV 인턴 Week2 이슈 `week2-github-api-spec.md` 기반으로 정리한
-**GitHub OAuth · 레포/커밋 조회 · 임베딩/포트폴리오용 API 명세서 초안**이다.
-
-**레퍼런스:** `AUTOFOLIO_16주_계획표.md`, `AUTOFOLIO_LangGraph_설계.md`, `AUTOFOLIO_임베딩전략.md`, week1-github-oauth, week2-github-api-spec.
+**문서 버전:** 1.0  
+**기준:** [AUTOFOLIO_16주_계획표.md](AUTOFOLIO_16주_계획표.md), [AUTOFOLIO_LangGraph_설계.md](AUTOFOLIO_LangGraph_설계.md), [AUTOFOLIO_임베딩전략.md](AUTOFOLIO_임베딩전략.md)
 
 ---
 
-### API 목차 (전체)
+## 1. 개요
+
+RCV 인턴 Week2 이슈 기반 **GitHub OAuth · 레포/커밋 조회 · 임베딩/포트폴리오용 API 명세서 초안**. 인증, 유저, GitHub 레포/커밋/트리/임베딩 API 정의.
+
+---
+
+## 2. API 목차 (전체)
 
 | 구분 | 메서드 | 경로 | 설명 |
 |------|--------|------|------|
@@ -27,9 +31,9 @@
 
 ---
 
-### 1. 인증 흐름 (OAuth)
+## 3. 인증 흐름 (OAuth)
 
-#### 1.1 `GET /api/auth/github/login`
+### 3.1 `GET /api/auth/github/login`
 
 - **역할**: GitHub OAuth authorize URL로 리다이렉트.
 - **요청**
@@ -39,7 +43,7 @@
 - **에러**
   - `500 INTERNAL_SERVER_ERROR`: 서버 설정 오류 (env 미설정 등).
 
-#### 1.2 `GET /api/auth/github/callback`
+### 3.2 `GET /api/auth/github/callback`
 
 - **역할**: GitHub에서 `code`, `state`를 받고 access_token 교환.
 - **요청 쿼리**
@@ -56,22 +60,22 @@
   - `400 BAD_REQUEST`: state 불일치, code 누락.
   - `500 INTERNAL_SERVER_ERROR`: GitHub API 오류 등.
 
-#### 1.3 `GET /api/auth/logout`
+### 3.3 `GET /api/auth/logout`
 
 - **역할**: 세션 무효화, 로그아웃.
 - **요청**: 쿠키/세션.
 - **응답**: `302` → 로그인 페이지 또는 `/`.
 - **에러**: 없음(세션 없어도 302).
 
-#### 1.4 연동 해제
+### 3.4 연동 해제
 
 - 제공하지 않음.
 
 ---
 
-### 2. 유저/선택 레포 API
+## 4. 유저/선택 레포 API
 
-#### 2.0 `GET /api/me`
+### 4.1 `GET /api/me`
 
 - **역할**: 현재 로그인 유저 정보(내부 user_id, GitHub login, 이메일 등).
 - **요청**: 세션 쿠키 또는 `Authorization: Bearer <app-session-token>`.
@@ -89,7 +93,7 @@
 
 - **에러**: `401` 세션 없음.
 
-#### 2.0-2 `GET /api/user/selected-repos`
+### 4.2 `GET /api/user/selected-repos`
 
 - **역할**: 유저가 “선택한 레포” 목록 조회(포트폴리오/임베딩 대상).
 - **요청**: 세션.
@@ -103,7 +107,7 @@
 }
 ```
 
-#### 2.0-3 `PUT /api/user/selected-repos`
+### 4.3 `PUT /api/user/selected-repos`
 
 - **역할**: 선택 레포 목록 저장(덮어쓰기).
 - **요청 본문**: `{"repo_ids": [123, 456]}` 또는 `{"full_names": ["owner/repo1"]}`.
@@ -112,9 +116,9 @@
 
 ---
 
-### 3. 레포/커밋/파일 조회 API
+## 5. 레포/커밋/파일 조회 API
 
-#### 3.1 `GET /api/github/repos`
+### 5.1 `GET /api/github/repos`
 
 - **역할**: 로그인 유저의 GitHub 레포 목록 조회.
 - **요청 헤더**
@@ -142,14 +146,14 @@
   - `401 UNAUTHORIZED`: 세션 없음/만료.
   - `502 BAD_GATEWAY`: GitHub API 실패.
 
-#### 3.2 `GET /api/github/repos/{id}`
+### 5.2 `GET /api/github/repos/{id}`
 
 - **역할**: 레포 단건 상세(메타데이터, default_branch, language 등). 레포 선택/임베딩 대상 확인용.
 - **요청**: 세션. Path `id`는 레포 ID 또는 `owner/repo` 문자열.
 - **응답 200**: GitHub `/repos/{owner}/{repo}` 응답 필드 중 필요한 것만 정제( id, full_name, description, private, language, stargazers_count, forks_count, default_branch, pushed_at 등).
 - **에러**: `403` 권한 없음, `404` 없음, `502` GitHub 오류.
 
-#### 3.3 `GET /api/github/repos/{id}/commits`
+### 5.3 `GET /api/github/repos/{id}/commits`
 
 - **역할**: 특정 레포의 커밋 목록 조회. **author 필터로 “내 커밋만” 집계 가능.**
 - **요청 파라미터**
@@ -182,7 +186,7 @@
   - `403 FORBIDDEN`: 접근 권한 없는 레포.
   - `502 BAD_GATEWAY`: GitHub API 실패.
 
-#### 3.4 `GET /api/github/repos/{id}/tree`
+### 5.4 `GET /api/github/repos/{id}/tree`
 
 - **역할**: 레포 파일/디렉터리 트리 조회 (임베딩·포트폴리오 대상 선택에 사용).
 - **쿼리**
@@ -202,7 +206,7 @@
 
 - **에러**: `403`, `404`, `502`.
 
-#### 3.5 `GET /api/github/repos/{id}/tree?path=...`
+### 5.5 `GET /api/github/repos/{id}/tree?path=...`
 
 - **역할**: 특정 **파일**의 raw 내용 조회(코드/문서 읽기). `AUTOFOLIO_임베딩전략.md`의 Leaf 레벨·RAPTOR 수집에 사용.
 - **쿼리**
@@ -213,9 +217,9 @@
 
 ---
 
-### 4. 임베딩 API (RAPTOR 폴더 기반 설계와 연계)
+## 6. 임베딩 API (RAPTOR 폴더 기반 설계와 연계)
 
-#### 4.1 `POST /api/github/repos/{id}/embedding`
+### 6.1 `POST /api/github/repos/{id}/embedding`
 
 - **역할**: 특정 레포(or 서브트리)에 대한 임베딩 생성/갱신 요청.
 - **요청 본문 예시**
@@ -247,7 +251,7 @@
 
 ---
 
-### 5. 로컬 실험 코드 vs 실서비스 백엔드 로직
+## 7. 로컬 실험 코드 vs 실서비스 백엔드 로직
 
 | 구분 | 파일 | 역할 | 실서비스에서의 위치 |
 |------|------|------|---------------------|
@@ -263,4 +267,19 @@
 - **Week2**:  
   - `src/github_embedding/login`에 공용 유틸 함수로 정리.  
   - 이 명세서 + FastAPI 라우터에서 이 유틸을 사용해 **실제 서비스 API**로 승격시키는 단계.
+
+---
+
+## 8. 문서 관계
+
+- 16주 계획표: [AUTOFOLIO_16주_계획표.md](AUTOFOLIO_16주_계획표.md)
+- LangGraph 설계: [AUTOFOLIO_LangGraph_설계.md](AUTOFOLIO_LangGraph_설계.md)
+- 임베딩 전략: [AUTOFOLIO_임베딩전략.md](AUTOFOLIO_임베딩전략.md)
+- API 명세: [AUTOFOLIO_API_스펙.md](AUTOFOLIO_API_스펙.md)
+
+---
+
+## 9. 문서 이력
+
+- 1.0: 초안. GitHub OAuth·레포/커밋/트리/임베딩 API 명세. docs 가이드라인 규격 반영.
 

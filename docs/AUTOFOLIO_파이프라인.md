@@ -1,11 +1,17 @@
 # Autofolio 파이프라인
 
 **문서 버전:** 1.4  
-**최종 정리일:** 2026-03-04
+**기준:** [AUTOFOLIO_기획서.md](AUTOFOLIO_기획서.md), [AUTOFOLIO_RAG_파이프라인_핵심.md](AUTOFOLIO_RAG_파이프라인_핵심.md)
 
 ---
 
-## 전체 파이프라인
+## 1. 개요
+
+Phase 1~3 전체 파이프라인 다이어그램. Data Mining & Portfolio → Job Intelligence → Evidence-Based IDE(Writer/Inspector) 흐름.
+
+---
+
+## 2. 전체 파이프라인
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -131,7 +137,7 @@
 
 ---
 
-## Output 정리
+## 3. Output 정리
 
 | Output | 설명 |
 |--------|------|
@@ -142,7 +148,7 @@
 
 ---
 
-## 요약
+## 4. 요약
 
 | Phase | 핵심 흐름 |
 |-------|-----------|
@@ -152,7 +158,15 @@
 
 ---
 
-## 문서 이력
+## 5. 문서 관계
+
+- 기획서: [AUTOFOLIO_기획서.md](AUTOFOLIO_기획서.md)
+- RAG 파이프라인: [AUTOFOLIO_RAG_파이프라인_핵심.md](AUTOFOLIO_RAG_파이프라인_핵심.md)
+- LangGraph 설계: [AUTOFOLIO_LangGraph_설계.md](AUTOFOLIO_LangGraph_설계.md)
+
+---
+
+## 6. 문서 이력
 
 - 1.0 (2026-02-12): 초안 작성.
 - 1.1 (2026-02-12): Phase 2에 자기소개서 문항 입력 추가, LLM 기반 크롤링 반영, 폴더 기반 RAPTOR 반영.

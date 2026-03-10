@@ -3,7 +3,7 @@
 **Slogan:** "From Code to Career" – 증거 기반 개발자 이력서
 
 **문서 버전:** 1.1  
-**최종 정리일:** 2026-03-04
+**기준:** (상위 문서 없음)
 
 ---
 
@@ -136,7 +136,15 @@ Autofolio는 **GitHub 코드/커밋** + **이력서/포트폴리오 문서**를 
 
 ---
 
-## 8. 문서 이력
+## 8. 문서 관계
+
+- 파이프라인: [AUTOFOLIO_파이프라인.md](AUTOFOLIO_파이프라인.md)
+- LangGraph 설계: [AUTOFOLIO_LangGraph_설계.md](AUTOFOLIO_LangGraph_설계.md)
+- API 스펙: [AUTOFOLIO_API_스펙.md](AUTOFOLIO_API_스펙.md)
+
+---
+
+## 9. 문서 이력
 
 - 1.0 (2026-02-12): 초안 작성.
 - 1.1 (2026-02-12): **이력서/포트폴리오 입력** 추가, Noise Filtering → 기본 제외로 변경, Job Fit 점수화 추가, 합격 자소서 크롤링 반영.
