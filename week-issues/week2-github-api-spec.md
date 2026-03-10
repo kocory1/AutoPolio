@@ -11,20 +11,42 @@
 | 항목 | 내용 |
 |------|------|
 | 브랜치 | `feature/week2-github-api-spec` 생성 |
-| API 명세서 | `docs/API_GitHub_Portfolio_Spec.md` — 인증(login, callback, logout, disconnect), 유저(/api/me, 선택 레포), GitHub(레포 목록·상세, 파일 트리·**파일 raw**, 커밋, 임베딩) 전부 명세 |
+| API 명세서 | `docs/API_GitHub_Portfolio_Spec.md` — Week2 기준 GitHub OAuth·레포/커밋/파일·임베딩 API 초안 정리 |
+| GitHub 전용 명세 | `docs/API_GitHub_Spec.md` — GitHub 레포 목록/선택, 파일·콘텐츠, 커밋(author 필터·집계), 임베딩 생성/저장까지 **요청 파라미터 + 응답 스키마 + 예시 JSON** 완성 |
+| 서비스 API 명세 | `docs/API_Service_Spec.md` — 채용공고 파싱, Job Fit, 자소서 Draft/Inspect, 포트폴리오 generate/get, 합격 자소서 검색(내부 모듈) 명세 정리 |
+| 전체 요약 명세 | `docs/API_Full_Spec.md` — GitHub + 서비스 API를 한 테이블과 요약 섹션으로 묶은 통합 명세서 |
 | 서비스 유틸 | `src/github_embedding/login/` OAuth·레포·커밋·트리 조회, `embedding/` 스켈레톤 |
 | 로컬 실험 | Week1 복기 + `github_code_and_commits_experiment.py` — 루트 목록, 문서/코드 파일 읽기, 타인 레포에서 `author=본인` 커밋만 조회 검증 |
 
 **로컬 실습 스크립트:** `github_oauth_local_test.py`(OAuth 플로우), `github_repo_describe_practice.py`(레포+LLM 설명), `github_code_and_commits_experiment.py`(파일 목록·코드 읽기·내 커밋만).  
 실행: `GITHUB_OAUTH_ACCESS_TOKEN` 설정 후 `poetry run python scripts/...`
 
+#### PR 피드백 반영 (2025-03-09)
+
+- **문서 구조 개편**
+  - `docs/API_GitHub_Spec.md`: GitHub 전용 API 명세를 PR 피드백 기준으로 재정리  
+    - `/api/github/repos/select` 제거, `/api/user/selected-repos`(GET/PUT) 추가  
+    - `/api/github/repos` 쿼리 파라미터에서 `page`, `per_page`만 노출 (나머지는 서버 고정값)  
+    - 비동기 임베딩 상태 조회용 `GET /api/github/repos/{repo_id}/embedding/status`(5.2) 추가
+  - `docs/API_Service_Spec.md`: Job/자소서/포트폴리오 서비스 API 명세 재정렬  
+    - Job 파싱 결과 **저장 안 함** 기준으로 `job_id` 제거, `parsed_job` 객체를 직접 body로 받는 방식으로 통일 (`/api/job-fit`, `/api/cover-letter/draft`, `/api/portfolio/generate`)  
+    - `POST /api/user/documents` 추가 (이력서/포트폴리오 문서 업로드 → OCR → VectorDB 저장)  
+    - `cover-letter/inspect` 요청에 `question_text` 필드 추가
+  - `docs/API_Auth_Spec.md`: GitHub 로그인/콜백/로그아웃/`/api/me`를 별도 인증 명세서로 분리  
+  - `docs/API_Common.md`: 공통 요청 형식, 공통 에러 코드, `score_label` 기준, 전체 API 사용 시퀀스를 한 곳에 모은 공통 문서 추가
+
+- **형식/품질 정리**
+  - 세 API 명세서(`API_Auth_Spec.md`, `API_GitHub_Spec.md`, `API_Service_Spec.md`)의 모든 엔드포인트에 대해:  
+    - Request Syntax(curl), Request Header 표, Request Element 표, Response(성공 JSON + 에러 표)를 일관되게 채움  
+    - `"..."`, `등` 같은 모호한 표현 제거, 모든 필드는 타입/설명까지 구체적으로 명시  
+    - 공통 에러는 각 엔드포인트 에러 표 하단에서 `API_Common.md` 의 공통 규칙을 참조하도록 통일  
+    - `score_label` 사용 엔드포인트(job-fit, inspect)는 공통 규칙의 기준표를 참조하도록 문구 추가
+
 ---
 
 ### 앞으로 할 것
 
 - [ ] FastAPI 라우터 구현 (명세서 기준)
-- [ ] 타인 레포 “내 커밋만” 실험 결과 1~2문단 정리
-- [ ] 레포 코드 인식 전략(Contents API vs 클론) 정리
 - [ ] github_embedding × LangGraph 연계, 인증/세션(DB·토큰) 문서화
 
 ---
