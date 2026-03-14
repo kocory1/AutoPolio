@@ -1,6 +1,6 @@
 # Writer 그래프 파이프라인 제안
 
-**문서 버전:** 1.9  
+**문서 버전:** 1.10  
 **기준:** [AUTOFOLIO_LangGraph_설계.md](AUTOFOLIO_LangGraph_설계.md) §3, [AUTOFOLIO_RAG_파이프라인_핵심.md](AUTOFOLIO_RAG_파이프라인_핵심.md), [AUTOFOLIO_API_스펙.md](AUTOFOLIO_API_스펙.md)
 
 ---
@@ -9,10 +9,11 @@
 
 **역할:** 문항 입력 → 유사 자소서 샘플 → 유저 DB(에셋) 조회 → 초안 작성 → 체크 → 아웃풋 교정 → 출력.
 
-**호출 경로:** `POST /api/cover-letter/draft` → **Writer 그래프** (에셋 조회는 그래프 내부 `load_assets` 노드에서 수행) → 초안 반환. (전략 수립 없음)
+**호출 경로:** `POST /api/cover-letter/draft` (body: `questions[]` 다문항) → **Writer 그래프**를 문항별로 호출 (에셋 조회는 그래프 내부 `load_assets`) → `draft_session_id` + `drafts[]` 반환. (전략 수립 없음)
 
-**입력:** `user_id`, `question`, `max_chars` (유저 입력), `job_parsed` (선택)  
-**출력:** `draft` (글자수·형식 정리된 초안)
+**API 입력:** `job_id`(선택), `tone`(선택), `questions[]` (각 항목: question_text, max_chars, min_chars 선택)  
+**그래프 입력(문항 1개 기준):** `user_id`, `question`, `max_chars` (및 `job_parsed`, `tone` 선택)  
+**출력:** `draft_session_id`, `drafts[]` (draft_id, question_text, answer, char_count)
 
 ---
 
@@ -171,15 +172,15 @@ class WriterState(TypedDict, total=False):
 
 ```
 [클라이언트] POST /api/cover-letter/draft
-    body: { "question_text": "...", "max_chars": 500, "job_id": "..." (선택) }
-         │  유저가 문항(질문+글자수) 직접 입력. user_id는 인증에서 추출.
+    body: { "job_id": "..." (선택), "tone": "professional"|"friendly"|"concise" (선택),
+            "questions": [ { "question_text": "...", "max_chars": 500, "min_chars": 0 (선택) }, ... ] }
+         │  다문항(3~5개) 한 번에 입력. user_id는 인증에서 추출.
          ▼
 [서버] 1. job_id 있으면 공고 파싱 결과 조회 (또는 캐시) → job_parsed
-      2. Writer 그래프 호출 (user_id, question, max_chars, job_parsed)
-         → retrieve_samples (유사 샘플) → load_assets (유저 DB 에셋 조회)
-         → generate_draft → self_consistency
-           → (통과) format_output / (실패 & retry < 3) generate_draft / (retry >= 3) format_output
-      3. draft 반환
+      2. draft_sessions 레코드 생성 후, 문항별 cover_letter_items 생성
+      3. Writer 그래프를 문항별로 호출 (user_id, question, max_chars, job_parsed, tone)
+         → retrieve_samples → load_assets → generate_draft → self_consistency → format_output
+      4. draft_session_id + drafts[] (draft_id, question_text, answer, char_count) 반환
 ```
 
 ---
@@ -205,7 +206,7 @@ src/graphs/writer_graph/
 | **전략 수립** | 전략 수립 그래프 없음. 에셋 조회는 Writer 내부 load_assets에서 수행. | 전략 수립 제거 확정 |
 | **유저 DB 조회 순서** | 문항 → 유사 샘플 → **유저 DB(에셋)** → 초안. 기본 중 기본. | retrieve_samples 다음 load_assets |
 | **samples 빈 리스트** | samples 없이도 assets로 생성 가능. | 그대로 진행, 프롬프트에 "샘플 없음" 명시 |
-| **max_chars 필수** | 자소서 문항(질문+글자수)은 **유저 입력**. draft API body에 `question_text`, `max_chars` 필수. | 채용공고 파싱 대상 아님. [AUTOFOLIO_채용공고파싱전략.md](AUTOFOLIO_채용공고파싱전략.md) |
+| **문항 입력** | 자소서 문항은 **유저 입력**. draft API body에 `questions[]` (각 항목: question_text, max_chars 필수, min_chars 선택) 필수. | 채용공고 파싱 대상 아님. [AUTOFOLIO_채용공고파싱전략.md](AUTOFOLIO_채용공고파싱전략.md) |
 
 ---
 
@@ -230,4 +231,5 @@ src/graphs/writer_graph/
 - 1.7: load_context 제거. retrieve_samples 진입 시 검증 통합.
 - 1.8: 검증 실패 시 피드백 프롬프트 반영 재생성 루프 복원. consistency_feedback, draft_retry_count.
 - 1.9: load_assets 노드 추가. 문항 → 유사 샘플 → **유저 DB(에셋)** → 초안 순서 확정. 에셋 조회를 Writer 그래프 내부로 이동.
+- 1.10: draft API 다문항 반영. 요청은 questions[], 응답은 draft_session_id + drafts[]. 그래프는 문항별 호출, DB는 draft_sessions/cover_letter_items.
 
