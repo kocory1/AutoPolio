@@ -1,6 +1,6 @@
 # User Asset 스키마 설계 제안
 
-**문서 버전:** 1.3  
+**문서 버전:** 1.4  
 **기준:** [AUTOFOLIO_임베딩전략.md](AUTOFOLIO_임베딩전략.md), [AUTOFOLIO_DB_스키마_설계.md](AUTOFOLIO_DB_스키마_설계.md), [AUTOFOLIO_RAG_파이프라인_핵심.md](AUTOFOLIO_RAG_파이프라인_핵심.md), [AUTOFOLIO_Writer_그래프_파이프라인_제안.md](AUTOFOLIO_Writer_그래프_파이프라인_제안.md), [AUTOFOLIO_Inspector_그래프_파이프라인_제안.md](AUTOFOLIO_Inspector_그래프_파이프라인_제안.md), [API_GitHub_Portfolio_Spec.md](API_GitHub_Portfolio_Spec.md)
 
 ---
@@ -109,30 +109,47 @@ ChromaDB는 `id`, `document`, `metadata`, `embedding` 구조를 사용한다.
 
 ---
 
-## 3. 조회 인터페이스 (제안)
+### 2.6 포트폴리오 STAR 다중 쿼리 전략
 
-Writer·Inspector `load_assets`에서 사용할 모듈 시그니처:
+GitHub 임베딩 문서(커밋·PR·README·코드 요약)는 STAR 서술 언어와 의미 거리가 멀기 때문에,
+단일 쿼리로는 recall이 낮다. **STAR 관점별 5개 쿼리를 병렬 실행 후 중복 제거**하여 recall을 높인다.
+
+| 쿼리 번호 | STAR 관점 | 핵심 키워드 |
+|-----------|-----------|-------------|
+| Q1 | Situation / Task | 문제 상황·레거시·장애·요구사항 / problem context legacy bottleneck incident |
+| Q2 | Action — 트러블슈팅·성능 개선 | 버그 수정·디버깅·성능 최적화·쿼리 튜닝 / troubleshooting performance latency |
+| Q3 | Action — 아키텍처·리팩토링 | 설계·모듈화·패턴·의존성 역전 / architecture refactoring design pattern |
+| Q4 | Action — 기능 구현·개발 | API·배포 자동화·CI/CD·테스트 커버리지 / feature implementation deployment |
+| Q5 | Result — 성과·임팩트 | 개선율·감소·증가·비즈니스 효과 / impact improvement metric business value |
+
+**중복 제거 규칙:** 동일 `id` 문서가 여러 쿼리에서 검색된 경우 가장 낮은(가까운) distance를 채택.
+최종 결과는 distance 오름차순으로 정렬 후 `top_k` 개 반환.
+
+---
+
+## 3. 조회 인터페이스
+
+포트폴리오 그래프 `load_profile` 및 Writer·Inspector `load_assets`에서 사용하는 모듈 시그니처:
 
 ```python
-def retrieve_user_assets(
+async def retrieve_user_assets(
     user_id: str,
-    query: str | None = None,
-    job_parsed: dict | None = None,
     source_filter: list[str] | None = None,  # ["github", "resume", "portfolio"]
-    type_filter: list[str] | None = None,   # ["code", "folder", "project", "document"]
-    top_k: int = 10,
+    type_filter: list[str] | None = None,    # ["code", "folder", "project", "document"]
+    top_k: int = 20,
 ) -> list[dict]:
     """
     user_id로 컬렉션 조회.
-    query 있으면 semantic search. 없으면 job_parsed 기반 쿼리 생성 또는 전체 상위.
-    반환: [{id, document, metadata, ...}, ...]
+    PORTFOLIO_STAR_QUERIES (STAR 관점별 5개 고정 쿼리) 다중 검색 후 id 기준 중복 제거,
+    distance 오름차순으로 최종 top_k 반환.
+    반환: [{id, document, metadata, distance}, ...]
     """
 ```
 
 **Job Fit용:**
 
 ```python
-def get_user_profile_summary(user_id: str) -> dict | None:
+async def get_user_profile_summary(user_id: str) -> dict | None:
     """
     루트 요약·폴더 요약 등 프로필 수준 데이터 반환.
     공고 파싱 결과와 비교해 점수 산출.
@@ -191,3 +208,4 @@ users (id)
 - 1.1: 통일 스키마. type=code|folder|project|document, source=github|resume|portfolio. metadata MVP 4개(type, source, repo, path). code=본인 커밋만. 이력서/포트폴리오 전체 요약 없음.
 - 1.2: §2.4 임베딩 대상 상세화. code/document는 summary 우선·content fallback. 선택 기준 명시.
 - 1.3: user_selected_repos→selected_repos. DB 스키마 설계와 통합, §6 ER 다이어그램 업데이트.
+- 1.4: §3 조회 인터페이스 실제 구현 기준으로 업데이트 — async def, top_k=20, query/job_parsed 제거, PORTFOLIO_STAR_QUERIES 고정 쿼리 전략으로 변경. §2.6 포트폴리오 STAR 다중 쿼리 전략 추가.

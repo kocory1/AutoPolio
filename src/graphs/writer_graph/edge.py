@@ -3,8 +3,6 @@
 검증 실패 시 consistency_feedback를 프롬프트에 담아 generate_draft 재호출.
 """
 
-from langgraph.graph import END
-
 from .state import WriterState
 
 MAX_DRAFT_RETRIES = 3

@@ -3,8 +3,6 @@
 load_draft 검증·조회 실패 시 END. re_inspect 후 round < max_rounds면 load_draft, 아니면 END.
 """
 
-from langgraph.graph import END
-
 from .state import InspectorState
 
 MAX_ROUNDS = 5

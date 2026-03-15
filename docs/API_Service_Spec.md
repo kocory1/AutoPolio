@@ -402,7 +402,8 @@ curl -X POST "https://example.com/api/cover-letter/inspect" \
 
 ### 4.1 POST `/api/portfolio/generate`
 
-- **설명:** GitHub 레포, 이력서·포트폴리오 문서, Job Fit 정보를 종합하여 **포트폴리오 초안**을 생성한다. 사용자 식별은 인증에서 추출한다.
+- **설명:** 인증된 사용자의 `selected_repos`(SSoT)를 기준으로 포트폴리오를 생성한다. 사용자 식별은 인증에서 추출한다.
+- **SSoT 규칙:** 생성 대상 레포는 요청 바디가 아니라 `selected_repos` 테이블을 단일 진실원으로 사용한다.
 
 #### 1. Request Syntax
 
@@ -410,7 +411,7 @@ curl -X POST "https://example.com/api/cover-letter/inspect" \
 curl -X POST "https://example.com/api/portfolio/generate" \
   -H "Authorization: Bearer <app-session-token>" \
   -H "Content-Type: application/json" \
-  -d '{"parsed_job":{"position_title":"백엔드 개발자","company_name":"Autofolio Corp","company_persona":"데이터 기반 의사결정을 중시하는 스타트업","duties":["포트폴리오 생성 API 설계 및 구현"],"requirements":["Python 3년 이상"],"preferences":["RAG 시스템 구축 경험"]},"github_repo_ids":[123,456],"document_ids":["doc_20250301_001"],"language":"ko"}'
+  -d '{}'
 ```
 
 #### 2. Request Header
@@ -423,18 +424,12 @@ curl -X POST "https://example.com/api/portfolio/generate" \
 
 #### 3. Request Element
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|----------|------|------|------|
-| parsed_job | object | N | 채용공고 파싱 결과(선택). /api/jobs/parse 응답과 동일 구조 |
-| parsed_job.position_title | string | N | 포지션명 |
-| parsed_job.company_name | string | N | 기업명 |
-| parsed_job.company_persona | string | N | 기업 인재상 |
-| parsed_job.duties | array&lt;string&gt; | N | 담당 업무 목록 |
-| parsed_job.requirements | array&lt;string&gt; | N | 자격 요건 목록 |
-| parsed_job.preferences | array&lt;string&gt; | N | 우대 사항 목록 |
-| github_repo_ids | array&lt;integer&gt; | N | 포함할 GitHub 레포 ID 목록 |
-| document_ids | array&lt;string&gt; | N | 포함할 문서 ID 목록 |
-| language | string | N | ko 등, default=ko |
+MVP 기준 요청 바디는 비워도 된다. (예: `{}`)
+
+- `parsed_job`: 공고 맞춤형 포트폴리오 단계에서 도입 예정 (현재 미사용)
+- `language`: 현재 미사용 (기본 한국어 출력)
+
+> `github_repo_ids`, `document_ids`는 제거되었다. 포함 레포는 `GET/PUT /api/user/selected-repos`로만 관리한다.
 
 #### 4. Response
 
@@ -444,36 +439,51 @@ curl -X POST "https://example.com/api/portfolio/generate" \
 {
   "portfolio_id": "portfolio_20250304_001",
   "user_id": "uuid-internal",
-  "language": "ko",
-  "sections": [
-    {
-      "id": "summary",
-      "title": "요약",
-      "content": "3년차 백엔드 개발자로서 RAG와 API 설계 경험을 보유하고 있으며, 데이터 기반 제품 개발에 기여하고자 합니다."
-    },
-    {
-      "id": "projects",
-      "title": "주요 프로젝트",
-      "content": "subway-rag-chatbot: 지하철 경로 안내 RAG 챗봇 설계 및 구현. LangChain 기반 검색 파이프라인과 FastAPI 백엔드를 담당했습니다."
-    }
-  ],
+  "portfolio": {
+    "title": "mspark 포트폴리오",
+    "summary": "선택한 2개 레포 기반 프로젝트 요약입니다.",
+    "projects": [
+      {
+        "repo": "owner/repo-a",
+        "intro": "owner/repo-a에서 쿼리 튜닝을 수행해 p95 35% 개선을 만든 프로젝트입니다.",
+        "stars": [
+          {"situation": "...", "task": "...", "action": "...", "result": "..."}
+        ]
+      }
+    ]
+  },
   "created_at": "2025-03-04T12:20:00Z"
 }
 ```
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
-| sections | array&lt;object&gt; | 포트폴리오 섹션 목록 |
-| sections[].id | string | 섹션 식별자 |
-| sections[].title | string | 섹션 제목 |
-| sections[].content | string | 섹션 본문 |
+| portfolio.title | string | 포트폴리오 제목 |
+| portfolio.summary | string | 전체 요약 |
+| portfolio.projects | array&lt;object&gt; | 레포 단위 프로젝트 목록 |
+| portfolio.projects[].repo | string | `owner/repo` |
+| portfolio.projects[].intro | string | 레포 소개 문장 |
+| portfolio.projects[].stars | array&lt;object&gt; | STAR 후보 목록 |
+| portfolio.projects[].stars[].situation | string | STAR Situation |
+| portfolio.projects[].stars[].task | string | STAR Task |
+| portfolio.projects[].stars[].action | string | STAR Action |
+| portfolio.projects[].stars[].result | string | STAR Result |
 
 | 상태코드 | error | 발생조건 |
 |----------|-------|----------|
+| 400 | BAD_REQUEST | `selected_repos`가 비어 있음 (`NO_SELECTED_REPOS`) |
 | 401 | UNAUTHORIZED | 로그인 필요 |
-| 404 | NOT_FOUND | user 또는 리소스 없음 |
+| 404 | NOT_FOUND | 사용자 없음 |
+| 500 | INTERNAL_SERVER_ERROR | 그래프 실행 실패 또는 내부 예외 |
 
-> 공통 에러(400/401/403/404/500/502)는 공통 규칙 참고.
+> 공통 에러 포맷은 `API_Common.md`를 따른다.
+>
+> ```json
+> {
+>   "error": "BAD_REQUEST",
+>   "message": "NO_SELECTED_REPOS"
+> }
+> ```
 
 ---
 
@@ -499,7 +509,6 @@ curl -X GET "https://example.com/api/portfolio?portfolio_id=portfolio_20250304_0
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |----------|------|------|------|
-| user_id | string | N | 기본=현재 로그인 유저 |
 | portfolio_id | string | N | 지정 시 단건 조회 |
 
 #### 4. Response
@@ -523,28 +532,26 @@ curl -X GET "https://example.com/api/portfolio?portfolio_id=portfolio_20250304_0
 {
   "portfolio_id": "portfolio_20250304_001",
   "user_id": "uuid-internal",
-  "language": "ko",
-  "sections": [
-    {
-      "id": "summary",
-      "title": "요약",
-      "content": "3년차 백엔드 개발자로서 RAG와 API 설계 경험을 보유하고 있으며, 데이터 기반 제품 개발에 기여하고자 합니다."
-    },
-    {
-      "id": "projects",
-      "title": "주요 프로젝트",
-      "content": "subway-rag-chatbot: 지하철 경로 안내 RAG 챗봇 설계 및 구현. LangChain 기반 검색 파이프라인과 FastAPI 백엔드를 담당했습니다."
-    }
-  ],
+  "portfolio": {
+    "title": "mspark 포트폴리오",
+    "summary": "선택한 2개 레포 기반 프로젝트 요약입니다.",
+    "projects": [
+      {
+        "repo": "owner/repo-a",
+        "intro": "owner/repo-a에서 쿼리 튜닝을 수행해 p95 35% 개선을 만든 프로젝트입니다.",
+        "stars": [
+          {"situation": "...", "task": "...", "action": "...", "result": "..."}
+        ]
+      }
+    ]
+  },
   "created_at": "2025-03-04T12:20:00Z"
 }
 ```
 
 | 필드 | 타입 | 설명 |
 |------|------|------|
-| sections[].id | string | 섹션 식별자 |
-| sections[].title | string | 섹션 제목 |
-| sections[].content | string | 섹션 본문 |
+| portfolio | object | 저장된 포트폴리오 JSON |
 
 | 상태코드 | error | 발생조건 |
 |----------|-------|----------|

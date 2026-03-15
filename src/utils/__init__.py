@@ -1,5 +1,6 @@
 """공용 유틸: 그래프 시각화, 랜덤 해시 등."""
 
+from .langsmith import configure_langsmith
 from .visualize import (
     NodeStyles,
     generate_random_hash,
@@ -7,4 +8,10 @@ from .visualize import (
     visualize_graph,
 )
 
-__all__ = ["NodeStyles", "save_graph_png", "visualize_graph", "generate_random_hash"]
+__all__ = [
+    "NodeStyles",
+    "save_graph_png",
+    "visualize_graph",
+    "generate_random_hash",
+    "configure_langsmith",
+]

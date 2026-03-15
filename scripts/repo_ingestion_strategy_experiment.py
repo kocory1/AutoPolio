@@ -171,7 +171,7 @@ def clone_repo_to_temp(
     cmd += [clone_url, str(tmp_dir)]
 
     # stdout/stderr를 캡처만 하고 출력은 하지 않는다 (토큰 노출 방지).
-    proc = subprocess.run(
+    subprocess.run(
         cmd,
         check=True,
         stdout=subprocess.PIPE,

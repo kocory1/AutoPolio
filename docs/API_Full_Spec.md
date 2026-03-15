@@ -125,11 +125,13 @@
 ### 3.4 포트폴리오 – POST `/api/portfolio/generate`, GET `/api/portfolio`
 
 - 생성:
-  - 입력: `user_id`, `job_id`, `github_repo_ids[]`, `document_ids[]`, `language`.
-  - 출력: `portfolio_id`, `sections[]`(요약, 프로젝트, 경험 등).
+  - 입력: 인증 사용자 기준 (요청 바디 비어도 됨).
+  - 레포 소스는 요청 바디가 아니라 `selected_repos`(SSoT)에서 조회한다.
+  - `parsed_job`, `language`는 공고 맞춤형 단계에서 도입 예정이며 현재 미사용.
+  - 출력: `portfolio_id`, `portfolio{title, summary, projects[]}`.
 - 조회:
   - 목록: `items[]` (portfolio_id, job_id, created_at)
-  - 단건: `portfolio_id`, `sections[]` 전체 내용.
+  - 단건: `portfolio_id`, `portfolio` 전체 내용.
 
 ---
 
