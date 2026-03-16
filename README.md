@@ -13,6 +13,9 @@ poetry install
 # 스크립트 실행 (가상환경 활성화 후)
 poetry run python scripts/jobkorea_collect_urls.py
 
+# SQlite 초기화
+poetry run python -m scripts.init_sqlite_db
+
 # 또는 셸에서 가상환경 활성화 후
 poetry shell
 python scripts/jobkorea_collect_urls.py
@@ -22,5 +25,6 @@ python scripts/jobkorea_collect_urls.py
 
 - [기획서](docs/AUTOFOLIO_기획서.md)
 - [파이프라인](docs/AUTOFOLIO_파이프라인.md)
+- [테스트 가이드](docs/AUTOFOLIO_테스트_가이드.md)
 - [자기소개서 크롤링 전략](docs/AUTOFOLIO_자기소개서크롤링전략.md)
 - [저장 전략 (크롤링)](scripts/README_저장전략.md)

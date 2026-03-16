@@ -6,13 +6,18 @@ FastAPI 앱 엔트리포인트.
 
 from fastapi import FastAPI
 
+from src.api import portfolio_router
+from src.utils.langsmith import configure_langsmith
+
 
 def create_app() -> FastAPI:
     """FastAPI 애플리케이션"""
 
+    tracing_enabled = configure_langsmith(default_project="autofolio-dev")
     app = FastAPI(title="Autofolio API")
+    app.state.langsmith_enabled = tracing_enabled
 
-    # TODO: api 라우터(include_router)와 미들웨어를 여기에서 등록한다.
+    app.include_router(portfolio_router)
 
     return app
 

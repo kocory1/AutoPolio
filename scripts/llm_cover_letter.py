@@ -12,7 +12,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from dotenv import load_dotenv
 

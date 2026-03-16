@@ -6,7 +6,7 @@ from langgraph.graph import END, START, StateGraph
 
 from src.utils.visualize import save_graph_png
 
-from .edge import after_self_consistency
+from .edge import after_load_profile, after_self_consistency
 from .node import (
     build_portfolio,
     build_star_sentence,
@@ -33,7 +33,14 @@ def build_portfolio_graph():
     graph.add_node("build_portfolio", build_portfolio)
 
     graph.add_edge(START, "load_profile")
-    graph.add_edge("load_profile", "build_star_sentence")
+    graph.add_conditional_edges(
+        "load_profile",
+        after_load_profile,
+        {
+            "build_star_sentence": "build_star_sentence",
+            END: END,
+        },
+    )
     graph.add_edge("build_star_sentence", "self_consistency")
     graph.add_conditional_edges(
         "self_consistency",
