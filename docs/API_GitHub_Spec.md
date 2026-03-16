@@ -1,7 +1,7 @@
 ## Autofolio GitHub API 명세
 
 **버전:** 1.0  
-**최종 정리일:** 2025-03-04
+**최종 정리일:** 2025-03-11
 
 이 문서는 Autofolio에서 사용하는 **GitHub 연동 전용 API**를 정리한 것이다.  
 인증(/api/auth/github/*, /api/me 등)은 별도 문서를 따르고, 여기서는 GitHub 레포·파일·커밋·임베딩 관련 엔드포인트만 다룬다.  
@@ -11,7 +11,7 @@
 
 ### 공통 규칙
 
-> 공통 요청 형식, 공통 에러 코드, score_label 기준은 `API_Common.md` 참고.
+> 공통 요청 형식, 공통 에러 코드는 `API_Common.md` 참고.
 
 - **Base URL (GitHub):** `/api/github`
 - **Base URL (User·선택 레포):** `/api/user`
@@ -419,13 +419,13 @@ curl -X POST "https://example.com/api/github/repos/123/embedding" \
 | strategy | string | N | default=code_and_docs_v1 |
 | force_refresh | boolean | N | default=false |
 
-#### paths[] 선택 레벨 규칙
+### paths[] 선택 레벨 규칙
 
 | 선택 레벨 | UI 동작 | paths[] 예시 |
 |----------|---------|-------------|
 | 레포 전체 | 레포 체크박스 선택 | `["/"]` |
 | 폴더 선택 | 폴더 펼치고 체크 | `["src/", "docs/"]` |
-| 파일 개별 선택 | 파일 체크박스 | `["src/main.py", "README.md", "src/utils/helper.py"]` |
+| 파일 개별 선택 | 파일 체크박스 | `["src/main.py", "README.md"]` |
 | 혼합 | 폴더 + 개별 파일 | `["src/auth/", "README.md"]` |
 
 **백엔드 처리 규칙:**
@@ -433,7 +433,7 @@ curl -X POST "https://example.com/api/github/repos/123/embedding" \
 - `"/"` → 레포 전체 트리 순회 (루트부터 모든 파일 포함)
 - `"src/"` (끝이 `/`) → 해당 폴더 하위 전체 재귀 포함
 - `"src/main.py"` (끝이 파일명) → 해당 파일만
-- **중복 경로 자동 제거:** 폴더가 선택된 상태에서 그 안의 파일이 따로 포함되면 폴더 경로 기준으로 합산 (예: `["src/", "src/main.py"]` → `["src/"]` 로 처리)
+- **중복 경로 자동 제거:** 폴더 + 그 안의 파일 동시 선택 시 폴더 기준 합산
 
 **전제 조건:**
 
@@ -496,7 +496,7 @@ curl -X POST "https://example.com/api/github/repos/123/embedding" \
 | strategy | string | 사용된 임베딩 전략 |
 | status | string | completed 등 |
 | embedding | object | chunks_indexed, dimensions, total_tokens, storage 등 |
-| hierarchy_nodes_created | integer | asset_hierarchy 테이블에 생성된 노드 수 (code + folder + project 합산). 디버깅·임베딩 규모 확인용. 캐시 히트 시 0 |
+| hierarchy_nodes_created | integer | asset_hierarchy 테이블에 생성된 노드 수 (code+folder+project 합산). 캐시 히트 시 0 |
 
 #### asset_hierarchy 연동
 
@@ -506,82 +506,18 @@ curl -X POST "https://example.com/api/github/repos/123/embedding" \
 |----------|---------|
 | PUT /api/user/selected-repos | selected_repos upsert |
 | POST /api/github/repos/{id}/embedding | asset_hierarchy 전체 재생성 + ChromaDB upsert |
-| GET /api/github/repos/{id}/embedding/status | asset_hierarchy 완성 여부 확인 가능 |
 
-**asset_hierarchy 구조:**
-
-- `type`: `"project"` (레포 루트, parent_id=NULL)
-- `type`: `"folder"` (중간 노드, parent_id → project 또는 folder)
-- `type`: `"code"` (leaf, parent_id → folder)
-
-RAPTOR bottom-up 임베딩 순서: **code → folder → project**  
-`asset_hierarchy.id` = ChromaDB `user_assets_{user_id}` 컬렉션의 document id와 동일.
+- `asset_hierarchy.id` = ChromaDB `user_assets_{user_id}`의 document id와 동일.
+- RAPTOR bottom-up 순서: **code → folder → project**
+- 재임베딩 시 해당 **selected_repo_id**의 asset_hierarchy 행 전부 삭제 후 재생성.
 
 | 상태코드 | error | 발생조건 |
 |----------|-------|----------|
 | 400 | BAD_REQUEST | paths가 비어 있거나 배열이 아님 |
 | 401 | UNAUTHORIZED | 로그인 필요 |
-| 403 | FORBIDDEN | 해당 repo_id가 selected_repos에 없음 (선택되지 않은 레포) |
+| 403 | FORBIDDEN | 해당 repo_id가 selected_repos에 등록되지 않음 |
 | 404 | NOT_FOUND | 레포 없음 |
 | 409 | EMBEDDING_IN_PROGRESS | 해당 레포/브랜치에 대한 임베딩 작업이 이미 진행 중 |
 | 502 | EMBEDDING_FAILED | 임베딩 생성 중 오류 |
-
-> 공통 에러(400/401/403/404/500/502)는 공통 규칙 참고.
-
----
-
-### 5.2 GET `/api/github/repos/{repo_id}/embedding/status`
-
-- **설명:** 비동기 임베딩 작업의 현재 상태 조회
-
-#### 1. Request Syntax
-
-```bash
-curl -X GET "https://example.com/api/github/repos/123/embedding/status?branch=main" \
-  -H "Authorization: Bearer <app-session-token>"
-```
-
-#### 2. Request Header
-
-| Header | 설명 | 필수 |
-|--------|------|------|
-| Cookie | 세션 쿠키 (인증된 경우) | Cookie 또는 Authorization 중 하나 필수 |
-| Authorization | `Bearer <app-session-token>` | Cookie 또는 Authorization 중 하나 필수 |
-
-#### 3. Request Element
-
-| 파라미터 | 타입 | 필수 | 설명 |
-|----------|------|------|------|
-| repo_id | integer \| string | Y | Path. GitHub 레포 ID 또는 `"owner/name"` |
-| branch | string | N | 브랜치명, default=레포 default_branch |
-
-#### 4. Response
-
-**200 OK**
-
-```json
-{
-  "repo_id": 123,
-  "branch": "main",
-  "status": "in_progress",
-  "started_at": "2026-03-04T10:20:00Z",
-  "completed_at": null,
-  "error_message": null
-}
-```
-
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| repo_id | integer | 레포 ID |
-| branch | string | 브랜치명 |
-| status | string | queued \| in_progress \| completed \| failed |
-| started_at | string \| null | ISO8601, 작업 시작 시각 (시작 전이면 null) |
-| completed_at | string \| null | ISO8601, 완료 시각 (미완료면 null) |
-| error_message | string \| null | 실패 시 오류 메시지 (정상이면 null) |
-
-| 상태코드 | error | 발생조건 |
-|----------|-------|----------|
-| 401 | UNAUTHORIZED | 로그인 필요 |
-| 404 | NOT_FOUND | 해당 레포/브랜치에 대한 임베딩 작업 없음 |
 
 > 공통 에러(400/401/403/404/500/502)는 공통 규칙 참고.

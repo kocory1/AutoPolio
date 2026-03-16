@@ -1,14 +1,14 @@
 # Autofolio API 전체 명세 (Full Spec)
 
 **버전:** 1.0  
-**최종 정리일:** 2025-03-09
+**최종 정리일:** 2025-03-11
 
 이 문서는 Autofolio API를 **한 곳에서 조망**하기 위한 통합 명세이다.  
 다음 네 문서의 내용을 묶어 두었다.
 
 | 문서 | 역할 |
 |------|------|
-| `API_Common.md` | 공통 요청 형식, 에러 규칙, score_label 기준, API 사용 시퀀스 |
+| `API_Common.md` | 공통 요청 형식, 에러 규칙, API 사용 시퀀스 |
 | `API_Auth_Spec.md` | GitHub OAuth 로그인/콜백/로그아웃, `/api/me` |
 | `API_GitHub_Spec.md` | GitHub 레포 목록·선택, 파일/콘텐츠, 커밋, 임베딩 |
 | `API_Service_Spec.md` | 문서 업로드, 채용공고 파싱, Job Fit, 자소서 Draft/Inspect, 포트폴리오 |
@@ -53,14 +53,6 @@
 | 500 | INTERNAL_SERVER_ERROR | 서버 내부 오류 |
 | 502 | GITHUB_UPSTREAM_ERROR | GitHub API 호출 실패 (GitHub 연동 API에만 해당) |
 
-### 4. score_label 기준표
-
-| score 범위 | score_label | 의미 |
-|-----------|-------------|------|
-| 0.8 이상 | HIGH | 높은 적합도 |
-| 0.6 이상 0.8 미만 | GOOD | 보통 적합도 |
-| 0.6 미만 | LOW | 낮은 적합도 |
-
 ---
 
 ## Part II. 인증 API (API_Auth_Spec)
@@ -81,7 +73,7 @@
 
 ## Part III. GitHub API (API_GitHub_Spec)
 
-**역할:** 로그인한 유저의 GitHub 레포 목록 조회, 선택 레포 저장/조회, 레포 내 파일 트리·파일 내용·커밋 조회, 임베딩 생성·상태 조회.  
+**역할:** 로그인한 유저의 GitHub 레포 목록 조회, 선택 레포 저장/조회, 레포 내 파일 트리·파일 내용·커밋 조회, 임베딩 생성.  
 Base URL: `/api/github` (선택 레포는 `/api/user`).
 
 | 메서드 | 경로 | 설명 |
@@ -93,7 +85,6 @@ Base URL: `/api/github` (선택 레포는 `/api/user`).
 | GET | `/api/github/repos/{repo_id}/contents` | 단일 파일 raw/base64 내용 |
 | GET | `/api/github/repos/{repo_id}/commits` | 커밋 목록·집계 (author 등 필터) |
 | POST | `/api/github/repos/{repo_id}/embedding` | 임베딩 생성·저장. selected_repos 등록 레포만 가능(미등록 시 403). paths[]로 레포/폴더/파일 단위 지정. 응답에 hierarchy_nodes_created(asset_hierarchy 노드 수) 포함 |
-| GET | `/api/github/repos/{repo_id}/embedding/status` | 임베딩 작업 상태 조회 |
 
 상세: `docs/API_GitHub_Spec.md`
 
@@ -108,10 +99,10 @@ Base URL: `/api/github` (선택 레포는 `/api/user`).
 | 메서드 | 경로 | 설명 |
 |--------|------|------|
 | POST | `/api/user/documents` | 이력서/포트폴리오 PDF·PPT 업로드 → OCR → VectorDB 저장 |
-| POST | `/api/jobs/parse` | 채용공고 입력: source_type=url(크롤링+파싱) 또는 manual(직접입력). 둘 다 jobs 저장 후 job_id 반환. url일 때 동일 url이면 캐시 반환 |
+| POST | `/api/jobs/parse` | 채용공고 입력: source_type=url(크롤링+파싱) 또는 manual(직접입력). 둘 다 jobs 저장 후 job_id 반환 |
 | POST | `/api/job-fit` | job_id(선택) 기준 Job Fit 점수·요인. 없으면 범용 생성 |
-| POST | `/api/cover-letter/draft` | 자소서 초안 생성. questions[] 다문항 한 번에 생성 → draft_session_id + drafts[] 반환 (job_id, tone 선택) |
-| POST | `/api/cover-letter/inspect` | 자소서 검수. draft_session_id + answers[] 입력 → feedbacks[] + overall_score 반환 |
+| POST | `/api/cover-letter/draft` | 자소서 초안 생성. questions[] 다문항 한 번에 생성 → drafts[] 반환 (job_id 선택) |
+| POST | `/api/cover-letter/inspect` | 자소서 검수. answers[] 입력 → feedbacks[] + overall_score(0~100) 반환 |
 | POST | `/api/portfolio/generate` | 포트폴리오 초안 생성 (job_id 선택) |
 | GET | `/api/portfolio` | 포트폴리오 목록/단건 조회 |
 
@@ -135,11 +126,10 @@ Base URL: `/api/github` (선택 레포는 `/api/user`).
 5. PUT /api/user/selected-repos — 레포 선택 저장 (GitHub)
 6. POST /api/user/documents — 이력서/포트폴리오 업로드 (Service, 선택)
 7. POST /api/github/repos/{id}/embedding — 임베딩 생성 (GitHub)
-8. GET /api/github/repos/{id}/embedding/status — 임베딩 완료 확인 (GitHub)
-9. POST /api/jobs/parse — 채용공고 입력·저장 (Service). 응답 job_id는 10·11·13번에서 선택 사용
-10. POST /api/job-fit — 적합도 점수 확인 (Service)
-11. POST /api/cover-letter/draft — 자소서 초안 생성 (Service)
-12. POST /api/cover-letter/inspect — 자소서 검수 (Service)
-13. POST /api/portfolio/generate — 포트폴리오 생성 (Service)
+8. POST /api/jobs/parse — 채용공고 입력·저장 (Service). 응답 job_id는 9·10·12번에서 선택 사용
+9. POST /api/job-fit — 적합도 점수 확인 (Service)
+10. POST /api/cover-letter/draft — 자소서 초안 생성 (Service)
+11. POST /api/cover-letter/inspect — 자소서 검수 (Service)
+12. POST /api/portfolio/generate — 포트폴리오 생성 (Service)
 
 6번(문서 업로드)은 선택 단계이며, 이력서/포트폴리오 문서가 없어도 자소서·포트폴리오 생성은 GitHub 임베딩만으로 진행 가능하다.

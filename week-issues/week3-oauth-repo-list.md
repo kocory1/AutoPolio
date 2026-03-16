@@ -77,3 +77,84 @@
 ---
 
 **레퍼런스:** `docs/API_Full_Spec.md`, `docs/API_Auth_Spec.md`, `docs/API_GitHub_Spec.md`, `docs/API_Service_Spec.md`, `docs/API_Common.md`, `docs/AUTOFOLIO_DB_스키마_설계.md`, `docs/AUTOFOLIO_GitHub_OAuth_가이드.md`
+
+---
+
+## Week 3 추가 — API 명세 전면 수정 및 DB 스키마 개편
+
+**작업 기간:** ~2026-03-16  
+**작업자:** Ara5429
+
+### 배경
+
+PR 리뷰(kocory1) 피드백 및 팀 합의를 바탕으로 API 명세서와 DB 스키마를 전면 수정했다.
+
+---
+
+### 확정 결정 사항
+
+| 항목 | 결정 |
+|------|------|
+| thread_id + round | ✅ 유지 (Inspector Human-in-the-loop MVP 포함) |
+| asset_hierarchy.id = path 포함 | ✅ 유지 (ChromaDB 조인 + GitHub API 파일 접근용) |
+| Inspector 재첨삭 MVP 포함 | ✅ 포함 |
+
+---
+
+### 수정된 파일 및 주요 변경 내용
+
+#### `docs/AUTOFOLIO_DB_스키마_설계.md` (v1.10 → v1.11)
+- draft_sessions + cover_letter_items → **drafts 단일 테이블** (MVP 단순화)
+- 제거: tone, min_chars, thread_id → 유지로 재확정, jobs.questions, portfolios.description
+- jobs 캐시 정책 제거 (항상 신규 저장)
+- ER 다이어그램 전면 업데이트
+
+#### `docs/API_Service_Spec.md`
+- **POST /api/jobs/parse:** source_type=url(크롤링) \| manual(직접입력), 항상 jobs 저장 후 job_id 반환
+- **POST /api/job-fit:** parsed_job 제거 → job_id 단일 입력, score 0~100 정수
+- **POST /api/cover-letter/draft:** questions[] 다문항 입력 → drafts[] 반환, tone/min_chars 제거
+- **POST /api/cover-letter/inspect:** answers[] 입력 → feedbacks[] 문항별 피드백, score 0~100
+- **POST /api/portfolio/generate:** parsed_job/github_repo_ids 제거 → job_id만, selected_repos SSoT
+
+#### `docs/API_GitHub_Spec.md`
+- **GET /embedding/status 엔드포인트 삭제** (동기 처리)
+- **POST /embedding:** paths[] 선택 레벨 규칙 비고 추가 (레포/폴더/파일/혼합)
+- **POST /embedding:** hierarchy_nodes_created 응답 필드 추가
+- **POST /embedding:** selected_repos 미등록 레포 403 에러 추가
+- asset_hierarchy 연동 비고 섹션 추가
+
+#### `docs/API_Common.md` / `docs/API_Full_Spec.md` / `docs/API_Auth_Spec.md`
+- score_label 기준표 전체 삭제
+- embedding/status 시퀀스에서 삭제, 번호 재조정 (8~13 → 8~12)
+
+#### `docs/AUTOFOLIO_Writer_그래프_파이프라인_제안.md` (v1.10 → v1.11)
+- API 입력에서 tone, min_chars 제거
+- draft_session_id 제거, drafts 단일 테이블 연동으로 변경
+- draft API 연동 캐시 문구 제거
+
+#### `docs/AUTOFOLIO_Inspector_그래프_파이프라인_제안.md` (v1.3 → v1.4)
+- inspect API 연동: draft_session_id 제거 → answers[].draft_id로 drafts 직접 조회
+- score_label 제거, score 0~100 퍼센트로 변경
+
+#### `docs/AUTOFOLIO_디렉토리_구조.md`
+- src/db/models.py 테이블 목록: cover_letters → drafts 수정
+
+#### `docs/AUTOFOLIO_User_Asset_스키마_설계.md`
+- retrieve_user_assets top_k 기본값: 10 → 20 수정
+
+---
+
+### asset_hierarchy path 설계 근거 (팀 논의 결과)
+
+- asset_hierarchy.id = `"owner/repo/src/auth/login.py"` 처럼 **path 자체를 id로 사용**한다.
+- **이유 1:** ChromaDB document id와 동일하게 맞춰 SQLite ↔ ChromaDB 조인이 쉽다.
+- **이유 2:** `POST /api/github/repos/{id}/embedding`에서 GitHub `GET /repos/{owner}/{repo}/contents/{path}` 호출 시 path를 그대로 재사용할 수 있다.
+- **이유 3:** parent_id만 있으면 트리 구조는 알 수 있지만, 실제 파일 경로 문자열을 완전히 복원할 수 없으므로 id에 path를 포함해 단일 진실원(SSoT)로 둔다.
+
+---
+
+### 남은 작업
+
+- [ ] `src/db/models.py`에 drafts 테이블 정의·마이그레이션 반영 확인
+- [ ] `src/api/cover_letter.py`에서 questions[] 요청 / drafts[] 응답 구조 반영
+- [ ] `src/api/jobs.py`에서 source_type=`url` \| `manual` 분기 및 저장 정책 구현 (둘 다 jobs 저장 + job_id 반환)

@@ -75,7 +75,7 @@ LangGraph 그래프 정의. Writer/Inspector/Portfolio 플로우를 관리하는
 SQLite 기반 DB 모델·세션.
 
 - `src/db/models.py`
-  - `users`, `cover_letters`, `jobs`, `selected_repos`, `asset_hierarchy`, `portfolios` 등
+  - `users`, `drafts`, `jobs`, `selected_repos`, `asset_hierarchy`, `portfolios` 등
   - [AUTOFOLIO_DB_스키마_설계.md](AUTOFOLIO_DB_스키마_설계.md) 기준
 - `src/db/session.py`: 엔진/세션 팩토리
 - (선택) `src/db/repositories/`: 테이블별 쿼리 모음

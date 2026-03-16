@@ -1,7 +1,7 @@
 ## Autofolio 인증 API 명세
 
 **버전:** 1.0  
-**최종 정리일:** 2025-03-09
+**최종 정리일:** 2025-03-11
 
 이 문서는 Autofolio의 **인증 관련 API**(GitHub OAuth 로그인, 로그아웃, 현재 유저 조회)를 정의한다.  
 인증이 완료된 뒤 사용하는 GitHub·서비스 API는 각각 `API_GitHub_Spec.md`, `API_Service_Spec.md`를 참고한다.
@@ -200,11 +200,10 @@ curl -X GET "https://example.com/api/me" \
 5. PUT /api/user/selected-repos — 레포 선택 저장 (GitHub)
 6. POST /api/user/documents — 이력서/포트폴리오 업로드 (Service, 선택)
 7. POST /api/github/repos/{id}/embedding — 임베딩 생성 (GitHub)
-8. GET /api/github/repos/{id}/embedding/status — 임베딩 완료 확인 (GitHub)
-9. POST /api/jobs/parse — 채용공고 입력·저장 (Service). 응답 job_id는 10·11·13번에서 선택 사용
-10. POST /api/job-fit — 적합도 점수 확인 (Service)
-11. POST /api/cover-letter/draft — 자소서 초안 생성 (Service)
-12. POST /api/cover-letter/inspect — 자소서 검수 (Service)
-13. POST /api/portfolio/generate — 포트폴리오 생성 (Service)
+8. POST /api/jobs/parse — 채용공고 입력·저장 (Service). 응답 job_id는 9·10·12번에서 선택 사용
+9. POST /api/job-fit — 적합도 점수 확인 (Service)
+10. POST /api/cover-letter/draft — 자소서 초안 생성 (Service)
+11. POST /api/cover-letter/inspect — 자소서 검수 (Service)
+12. POST /api/portfolio/generate — 포트폴리오 생성 (Service)
 
 6번(문서 업로드)은 선택 단계이며, 이력서/포트폴리오 문서가 없어도 자소서·포트폴리오 생성은 GitHub 임베딩만으로 진행 가능하다.
