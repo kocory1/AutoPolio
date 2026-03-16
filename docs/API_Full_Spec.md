@@ -1,21 +1,39 @@
-## Autofolio 전체 API 명세 (GitHub + Service)
+# Autofolio API 전체 명세 (Full Spec)
 
-**문서 버전:** 1.0  
-**최종 정리일:** 2026-03-05
+**버전:** 1.0  
+**최종 정리일:** 2025-03-09
 
-이 문서는 Autofolio의 **전체 API**를 한눈에 볼 수 있도록 정리한 통합 명세서이다.
+이 문서는 Autofolio API를 **한 곳에서 조망**하기 위한 통합 명세이다.  
+다음 네 문서의 내용을 묶어 두었다.
 
-- GitHub 연동 전용 상세 문서: `API_GitHub_Spec.md`
-- 서비스 레벨 상세 문서 (채용공고/Job Fit/자소서/포트폴리오): `API_Service_Spec.md`
+| 문서 | 역할 |
+|------|------|
+| `API_Common.md` | 공통 요청 형식, 에러 규칙, score_label 기준, API 사용 시퀀스 |
+| `API_Auth_Spec.md` | GitHub OAuth 로그인/콜백/로그아웃, `/api/me` |
+| `API_GitHub_Spec.md` | GitHub 레포 목록·선택, 파일/콘텐츠, 커밋, 임베딩 |
+| `API_Service_Spec.md` | 문서 업로드, 채용공고 파싱, Job Fit, 자소서 Draft/Inspect, 포트폴리오 |
 
-여기서는 두 문서의 핵심 내용을 한 파일로 모아서 정리한다.
+**상세한 Request/Response 스키마, curl 예제, 에러 표**는 각 문서를 참고한다.
 
 ---
 
-## 0. 공통 규칙
+## Part I. 공통 규칙 (API_Common)
 
-- **인증:** 세션 쿠키 또는 `Authorization: Bearer <app-session-token>`
-- **에러 응답 포맷(공통):**
+### 1. 공통 요청 형식
+
+- **Content-Type:** 기본 `application/json`. 파일 업로드는 `multipart/form-data`(해당 엔드포인트에서 명시).
+- **인증:** 세션 쿠키 또는 `Authorization: Bearer <app-session-token>`.
+
+**HTTP 상태코드**
+
+| 상태코드 범위 | 의미 |
+|-------------|------|
+| 200번대 | 성공 |
+| 302 | 리다이렉트 |
+| 400번대 | 클라이언트 오류 |
+| 500번대 | 서버 오류 |
+
+### 2. 공통 에러 응답 형식
 
 ```json
 {
@@ -24,105 +42,78 @@
 }
 ```
 
----
+### 3. 공통 에러 코드표
 
-## 1. API 목차
+| HTTP 상태코드 | error | 발생조건 |
+|--------------|-------|----------|
+| 400 | BAD_REQUEST | 요청 파라미터 누락 또는 형식 오류 |
+| 401 | UNAUTHORIZED | 세션 없음 또는 만료 |
+| 403 | FORBIDDEN | 접근 권한 없음 |
+| 404 | NOT_FOUND | 요청한 리소스 없음 |
+| 500 | INTERNAL_SERVER_ERROR | 서버 내부 오류 |
+| 502 | GITHUB_UPSTREAM_ERROR | GitHub API 호출 실패 (GitHub 연동 API에만 해당) |
 
-| 구분 | 메서드 | 경로 | 설명 |
-|------|--------|------|------|
-| 인증 | GET | `/api/auth/github/login` | GitHub OAuth 시작(리다이렉트) |
-| 인증 | GET | `/api/auth/github/callback` | OAuth 콜백, 토큰 교환·세션 생성 |
-| 인증 | GET | `/api/auth/logout` | 로그아웃 |
-| 인증 | POST | `/api/auth/github/disconnect` | GitHub 연동 해제 (**MVP 이후 TODO**) |
-| 유저 | GET | `/api/me` | 현재 로그인 유저 정보 |
-| 유저 | GET/PUT | `/api/user/selected-repos` | 선택 레포 목록 조회/저장 |
-| 유저 | POST | `/api/user/documents` | 이력서·포트폴리오 PDF·PPT 업로드 → OCR·임베딩 저장 |
-| GitHub | GET | `/api/github/repos` | 로그인 유저 레포 목록 |
-| GitHub | POST | `/api/github/repos/select` | 선택 레포 저장 |
-| GitHub | GET | `/api/github/repos/{repo_id}` | 레포 단건 상세 |
-| GitHub | GET | `/api/github/repos/{repo_id}/files` | 파일/디렉터리 트리 조회 |
-| GitHub | GET | `/api/github/repos/{repo_id}/contents` | 파일 raw 내용 조회 |
-| GitHub | GET | `/api/github/repos/{repo_id}/commits` | 커밋 목록 + 집계(summary) |
-| GitHub | POST | `/api/github/repos/{repo_id}/embedding` | 임베딩 생성 + DB 저장 |
-| 채용공고 | POST | `/api/jobs/parse` | 담당업무/자격요건/우대사항/기업명/인재상/포지션명 추출 |
-| Job Fit | POST | `/api/job-fit` | User DB + 공고 결과 비교 → Job Fit 점수 |
-| 자소서 | POST | `/api/cover-letter/draft` | 자소서 초안 생성 (전략 수립 + Writer + 합격 자소서 모듈) |
-| 자소서 | POST | `/api/cover-letter/inspect` | 자소서 검수/피드백 (Inspector) |
-| 포트폴리오 | POST | `/api/portfolio/generate` | 포트폴리오 생성 |
-| 포트폴리오 | GET | `/api/portfolio` | 포트폴리오 조회 |
+### 4. score_label 기준표
 
-> **합격 자소서 검색**은 REST API가 아니며,  
-> `/api/cover-letter/draft` 내부에서만 호출되는 Retrieval 모듈이다.
+| score 범위 | score_label | 의미 |
+|-----------|-------------|------|
+| 0.8 이상 | HIGH | 높은 적합도 |
+| 0.6 이상 0.8 미만 | GOOD | 보통 적합도 |
+| 0.6 미만 | LOW | 낮은 적합도 |
 
 ---
 
-## 2. GitHub API 요약
+## Part II. 인증 API (API_Auth_Spec)
 
-자세한 내용은 `API_GitHub_Spec.md` 참조.
+**역할:** GitHub OAuth를 통한 로그인·세션 발급, 로그아웃, 현재 유저 조회.  
+비밀번호는 앱이 받지 않으며, GitHub 로그인 페이지에서만 입력된다.
 
-### 2.1 레포 목록/선택
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/auth/github/login` | GitHub OAuth authorize URL로 302 리다이렉트 |
+| GET | `/api/auth/github/callback` | code·state 수신 → access_token 교환·세션 발급 → 302 → /dashboard |
+| GET | `/api/auth/logout` | 세션 무효화 후 302 → / |
+| GET | `/api/me` | 현재 로그인 유저 정보 반환 (user_id, github_login, github_id, email, avatar_url) |
 
-- **GET `/api/github/repos`**
-  - 로그인 유저의 레포 목록, `per_page`, `page`, `sort`, `direction`, `type` 쿼리 지원.
-  - 응답: `repos[]` + 페이징 정보, 각 레포의 id/full_name/description/private/language/stars/forks/default_branch/pushed_at.
-
-- **POST `/api/github/repos/select`**
-  - 바디: `repo_ids`, `full_names`, `replace` (덮어쓰기 여부).
-  - 응답: 최종 `selected_repos[]` 목록.
-
-### 2.2 파일/콘텐츠/커밋
-
-- **GET `/api/github/repos/{repo_id}/files`**
-  - 쿼리: `path`, `depth`, `ref`  
-  - 응답: `tree[]` (path, type=file/dir) + root/ref 정보.
-
-- **GET `/api/github/repos/{repo_id}/contents`**
-  - 쿼리: `path`(필수), `ref`, `encoding`(raw/base64).  
-  - 응답: raw 텍스트 또는 `{content: base64, ...}` JSON.
-
-- **GET `/api/github/repos/{repo_id}/commits`**
-  - 쿼리: `author`, `path`, `since`, `until`, `per_page`, `page`.  
-  - 응답: `summary`(total_commits, author_commits, files_changed_total, date_range) + `commits[]`.
-
-### 2.3 임베딩
-
-- **POST `/api/github/repos/{repo_id}/embedding`**
-  - 바디: `paths[]`, `branch`, `strategy`, `force_refresh`.  
-  - 응답: `status=completed`, `embedding`(chunks_indexed, dimensions, tokens, storage 정보)와 함께 VectorDB 저장 상태 반환.  
-  - 에러: `BAD_REQUEST`(paths 비어 있음), `EMBEDDING_IN_PROGRESS`, `EMBEDDING_FAILED` 등.
+상세: `docs/API_Auth_Spec.md`
 
 ---
 
-## 3. 서비스 API 요약
+## Part III. GitHub API (API_GitHub_Spec)
 
-자세한 내용은 `API_Service_Spec.md` 참조.
+**역할:** 로그인한 유저의 GitHub 레포 목록 조회, 선택 레포 저장/조회, 레포 내 파일 트리·파일 내용·커밋 조회, 임베딩 생성·상태 조회.  
+Base URL: `/api/github` (선택 레포는 `/api/user`).
 
-### 3.1 채용공고 파싱 – POST `/api/jobs/parse`
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/github/repos` | 레포 목록 (page, per_page만 노출) |
+| GET | `/api/user/selected-repos` | 선택 레포 목록 조회 |
+| PUT | `/api/user/selected-repos` | 선택 레포 저장(갱신) |
+| GET | `/api/github/repos/{repo_id}/files` | 파일/디렉터리 트리 |
+| GET | `/api/github/repos/{repo_id}/contents` | 단일 파일 raw/base64 내용 |
+| GET | `/api/github/repos/{repo_id}/commits` | 커밋 목록·집계 (author 등 필터) |
+| POST | `/api/github/repos/{repo_id}/embedding` | 임베딩 생성·저장. selected_repos 등록 레포만 가능(미등록 시 403). paths[]로 레포/폴더/파일 단위 지정. 응답에 hierarchy_nodes_created(asset_hierarchy 노드 수) 포함 |
+| GET | `/api/github/repos/{repo_id}/embedding/status` | 임베딩 작업 상태 조회 |
 
-- 채용공고 텍스트 또는 URL을 입력받아:
-  - `position_title`, `company_name`, `company_persona`,
-  - `duties[]`, `requirements[]`, `preferences[]`
-  를 추출하고 `job_id`로 저장.
+상세: `docs/API_GitHub_Spec.md`
 
-### 3.2 Job Fit – POST `/api/job-fit`
+---
 
-- 입력: `user_id`, `job_id`  
-- 출력: `score`(0~1), `score_label`(HIGH/MEDIUM/LOW), `factors[]` (skills_match, experience_level, company_fit 등 세부 항목별 점수 및 설명).
+## Part IV. 서비스 API (API_Service_Spec)
 
-### 3.3 자소서 – Draft / Inspect
+**역할:** 이력서/포트폴리오 문서 업로드, 채용공고 입력·저장, Job Fit 점수, 자소서 초안·검수, 포트폴리오 생성·조회.  
+채용공고는 **POST /api/jobs/parse** 호출 시 항상 **jobs 테이블에 저장**되며 응답에 **job_id**를 반환한다.  
+이후 job-fit, cover-letter/draft, portfolio/generate는 **job_id만** 받으며, job_id 없으면 공고 맥락 없이 User DB 기준 범용 생성한다.
 
-- **POST `/api/cover-letter/draft`**
-  - 입력: `user_id`, `job_id`, `question_id`, `question_text`, `constraints(min/max_chars, tone, ...)`.
-  - 내부에서:
-    - 전략 수립 그래프 호출,
-    - GitHub/포트폴리오/Job Fit/합격 자소서 Retrieval 결과를 조합,
-    - 초안(`answer`)과 사용한 에셋 목록(`used_assets`)을 생성.
-
-- **POST `/api/cover-letter/inspect`**
-  - 입력: 사용자가 작성한 `answer`.
-  - 출력: `score`, `strengths[]`, `weaknesses[]`, `suggestions[]` 등 Inspector 결과.
-
-### 3.4 포트폴리오 – POST `/api/portfolio/generate`, GET `/api/portfolio`
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/api/user/documents` | 이력서/포트폴리오 PDF·PPT 업로드 → OCR → VectorDB 저장 |
+| POST | `/api/jobs/parse` | 채용공고 입력: source_type=url(크롤링+파싱) 또는 manual(직접입력). 둘 다 jobs 저장 후 job_id 반환. url일 때 동일 url이면 캐시 반환 |
+| POST | `/api/job-fit` | job_id(선택) 기준 Job Fit 점수·요인. 없으면 범용 생성 |
+| POST | `/api/cover-letter/draft` | 자소서 초안 생성. questions[] 다문항 한 번에 생성 → draft_session_id + drafts[] 반환 (job_id, tone 선택) |
+| POST | `/api/cover-letter/inspect` | 자소서 검수. draft_session_id + answers[] 입력 → feedbacks[] + overall_score 반환 |
+| POST | `/api/portfolio/generate` | 포트폴리오 초안 생성 (job_id 선택) |
+| GET | `/api/portfolio` | 포트폴리오 목록/단건 조회 |
 
 - 생성:
   - 입력: 인증 사용자 기준 (요청 바디 비어도 됨).
@@ -135,17 +126,20 @@
 
 ---
 
-## 4. 미구현/향후 TODO
+## Part V. API 사용 시퀀스
 
-- **disconnect API:**  
-  - `POST /api/auth/github/disconnect` 는 **MVP에서 제외**.  
-  - 현재는 로그아웃만 제공하며, 추후 “GitHub 연동 해제”가 필요해지면 별도 이슈로 설계.
+1. GET /api/auth/github/login — GitHub 로그인 시작 (Auth)
+2. GET /api/auth/github/callback — 세션 발급 완료 (Auth)
+3. GET /api/me — 유저 정보 확인 (Auth)
+4. GET /api/github/repos — 레포 목록 조회 (GitHub)
+5. PUT /api/user/selected-repos — 레포 선택 저장 (GitHub)
+6. POST /api/user/documents — 이력서/포트폴리오 업로드 (Service, 선택)
+7. POST /api/github/repos/{id}/embedding — 임베딩 생성 (GitHub)
+8. GET /api/github/repos/{id}/embedding/status — 임베딩 완료 확인 (GitHub)
+9. POST /api/jobs/parse — 채용공고 입력·저장 (Service). 응답 job_id는 10·11·13번에서 선택 사용
+10. POST /api/job-fit — 적합도 점수 확인 (Service)
+11. POST /api/cover-letter/draft — 자소서 초안 생성 (Service)
+12. POST /api/cover-letter/inspect — 자소서 검수 (Service)
+13. POST /api/portfolio/generate — 포트폴리오 생성 (Service)
 
-- **채용공고 크롤링 API:**  
-  - 현재는 외부 사이트에서 텍스트/URL로 입력받는 수준.  
-  - 직접 크롤링/동기화 API는 16주 계획표 상 후순위.
-
-- **합격 자소서 검색 별도 API:**  
-  - Writer 그래프 내부 Retrieval 모듈로만 존재.  
-  - 외부 REST API로 열 계획은 현재 없음.
-
+6번(문서 업로드)은 선택 단계이며, 이력서/포트폴리오 문서가 없어도 자소서·포트폴리오 생성은 GitHub 임베딩만으로 진행 가능하다.

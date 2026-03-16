@@ -201,7 +201,7 @@ curl -X GET "https://example.com/api/me" \
 6. POST /api/user/documents — 이력서/포트폴리오 업로드 (Service, 선택)
 7. POST /api/github/repos/{id}/embedding — 임베딩 생성 (GitHub)
 8. GET /api/github/repos/{id}/embedding/status — 임베딩 완료 확인 (GitHub)
-9. POST /api/jobs/parse — 채용공고 파싱 (Service)
+9. POST /api/jobs/parse — 채용공고 입력·저장 (Service). 응답 job_id는 10·11·13번에서 선택 사용
 10. POST /api/job-fit — 적합도 점수 확인 (Service)
 11. POST /api/cover-letter/draft — 자소서 초안 생성 (Service)
 12. POST /api/cover-letter/inspect — 자소서 검수 (Service)

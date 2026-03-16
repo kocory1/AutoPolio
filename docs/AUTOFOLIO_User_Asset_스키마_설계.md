@@ -162,7 +162,7 @@ async def get_user_profile_summary(user_id: str) -> dict | None:
 
 | 소스 | 트리거 | 처리 |
 |------|--------|------|
-| **GitHub** | `POST /api/github/repos/{id}/embedding` | 트리 수집 → Noise Filtering → **본인 커밋 파일만** code 임베딩 → folder/project Bottom-up 요약·임베딩 → ChromaDB upsert |
+| **GitHub** | `POST /api/github/repos/{id}/embedding` | 트리 수집 → Noise Filtering → **본인 커밋 파일만** code 임베딩 → folder/project Bottom-up 요약·임베딩 → ChromaDB upsert. **selected_repos**에 등록된 레포만 가능(미등록 시 403). paths[]로 레포 전체/폴더/파일 지정. SQLite asset_hierarchy 동기 갱신. |
 | **이력서/포트폴리오** | `POST /api/user/documents` | PDF·PPT 업로드 → OCR·전처리 → 청크 분할 → document 임베딩 → ChromaDB upsert (전체 요약 없음) |
 
 ---
@@ -170,7 +170,8 @@ async def get_user_profile_summary(user_id: str) -> dict | None:
 ## 5. SQLite와의 관계
 
 - **portfolios** 테이블: 포트폴리오 메타데이터 (이름, 설명, content). 에셋 내용은 VectorDB에만 저장.
-- **selected_repos**: 임베딩 대상 레포 목록. `repo_full_name`(owner/repo)으로 레포 구분. VectorDB 인덱싱 시 참조.
+- **selected_repos**: 임베딩 대상 레포 목록. `repo_full_name`(owner/repo)으로 레포 구분. VectorDB 인덱싱 시 참조. **임베딩 API는 selected_repos에 등록된 레포에 대해서만 호출 가능**하며, 미등록 레포는 403 반환 (상세: `API_GitHub_Spec.md` §5.1).
+- **asset_hierarchy** (SQLite): RAPTOR 계층(project/folder/code). embedding 호출 시 해당 레포의 행 전부 삭제 후 재생성. `asset_hierarchy.id` = ChromaDB document id와 동일.
 
 ---
 

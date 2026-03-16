@@ -419,6 +419,26 @@ curl -X POST "https://example.com/api/github/repos/123/embedding" \
 | strategy | string | N | default=code_and_docs_v1 |
 | force_refresh | boolean | N | default=false |
 
+#### paths[] 선택 레벨 규칙
+
+| 선택 레벨 | UI 동작 | paths[] 예시 |
+|----------|---------|-------------|
+| 레포 전체 | 레포 체크박스 선택 | `["/"]` |
+| 폴더 선택 | 폴더 펼치고 체크 | `["src/", "docs/"]` |
+| 파일 개별 선택 | 파일 체크박스 | `["src/main.py", "README.md", "src/utils/helper.py"]` |
+| 혼합 | 폴더 + 개별 파일 | `["src/auth/", "README.md"]` |
+
+**백엔드 처리 규칙:**
+
+- `"/"` → 레포 전체 트리 순회 (루트부터 모든 파일 포함)
+- `"src/"` (끝이 `/`) → 해당 폴더 하위 전체 재귀 포함
+- `"src/main.py"` (끝이 파일명) → 해당 파일만
+- **중복 경로 자동 제거:** 폴더가 선택된 상태에서 그 안의 파일이 따로 포함되면 폴더 경로 기준으로 합산 (예: `["src/", "src/main.py"]` → `["src/"]` 로 처리)
+
+**전제 조건:**
+
+- 임베딩은 반드시 **selected_repos**에 등록된 레포에 대해서만 수행 가능. selected_repos에 없는 repo_id로 호출 시 **403 FORBIDDEN** 반환.
+
 #### 4. Response
 
 **200 OK (임베딩 생성 및 저장 완료)**
@@ -439,7 +459,8 @@ curl -X POST "https://example.com/api/github/repos/123/embedding" \
       "index_name": "autofolio_github_repo_123_main",
       "last_updated_at": "2026-03-04T10:23:45Z"
     }
-  }
+  },
+  "hierarchy_nodes_created": 243
 }
 ```
 
@@ -462,15 +483,45 @@ curl -X POST "https://example.com/api/github/repos/123/embedding" \
       "last_updated_at": "2026-03-01T09:00:00Z"
     },
     "cache_hit": true
-  }
+  },
+  "hierarchy_nodes_created": 0
 }
 ```
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| repo_id | integer | GitHub 레포 ID |
+| branch | string | 브랜치명 |
+| paths | array&lt;string&gt; | 요청한 경로 목록 |
+| strategy | string | 사용된 임베딩 전략 |
+| status | string | completed 등 |
+| embedding | object | chunks_indexed, dimensions, total_tokens, storage 등 |
+| hierarchy_nodes_created | integer | asset_hierarchy 테이블에 생성된 노드 수 (code + folder + project 합산). 디버깅·임베딩 규모 확인용. 캐시 히트 시 0 |
+
+#### asset_hierarchy 연동
+
+임베딩 생성 시 **asset_hierarchy** 테이블이 함께 갱신된다.
+
+| API 호출 | DB 동작 |
+|----------|---------|
+| PUT /api/user/selected-repos | selected_repos upsert |
+| POST /api/github/repos/{id}/embedding | asset_hierarchy 전체 재생성 + ChromaDB upsert |
+| GET /api/github/repos/{id}/embedding/status | asset_hierarchy 완성 여부 확인 가능 |
+
+**asset_hierarchy 구조:**
+
+- `type`: `"project"` (레포 루트, parent_id=NULL)
+- `type`: `"folder"` (중간 노드, parent_id → project 또는 folder)
+- `type`: `"code"` (leaf, parent_id → folder)
+
+RAPTOR bottom-up 임베딩 순서: **code → folder → project**  
+`asset_hierarchy.id` = ChromaDB `user_assets_{user_id}` 컬렉션의 document id와 동일.
 
 | 상태코드 | error | 발생조건 |
 |----------|-------|----------|
 | 400 | BAD_REQUEST | paths가 비어 있거나 배열이 아님 |
 | 401 | UNAUTHORIZED | 로그인 필요 |
-| 403 | FORBIDDEN | 해당 레포 접근 권한 없음 |
+| 403 | FORBIDDEN | 해당 repo_id가 selected_repos에 없음 (선택되지 않은 레포) |
 | 404 | NOT_FOUND | 레포 없음 |
 | 409 | EMBEDDING_IN_PROGRESS | 해당 레포/브랜치에 대한 임베딩 작업이 이미 진행 중 |
 | 502 | EMBEDDING_FAILED | 임베딩 생성 중 오류 |
