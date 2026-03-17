@@ -1,6 +1,6 @@
 # Autofolio DB 스키마 설계
 
-**문서 버전:** 1.10  
+**문서 버전:** 1.11  
 **기준:** [AUTOFOLIO_RAG_파이프라인_핵심.md](AUTOFOLIO_RAG_파이프라인_핵심.md), [AUTOFOLIO_API_스펙.md](AUTOFOLIO_API_스펙.md), [AUTOFOLIO_합격자소서_벡터DB_스키마.md](AUTOFOLIO_합격자소서_벡터DB_스키마.md)
 
 ---
@@ -9,7 +9,7 @@
 
 | 저장소 | 용도 |
 |--------|------|
-| **SQLite** | users, draft_sessions, cover_letter_items, jobs, selected_repos, asset_hierarchy, portfolios |
+| **SQLite** | users, drafts, jobs, selected_repos, asset_hierarchy, portfolios |
 | **ChromaDB** | passed_cover_letters (합격 자소서 문항 유사 검색) |
 | **ChromaDB** | user_assets_{user_id} (RAPTOR, Job Fit, Writer/Inspector 에셋 조회) |
 
@@ -27,40 +27,27 @@
 | `created_at` | DATETIME | 가입 시각 |
 | `updated_at` | DATETIME | 수정 시각 |
 
-### 2.2 draft_sessions (자소서 세션)
+### 2.2 drafts (자소서 문항 단위)
 
-한 번의 초안 생성 요청 단위 (공고 + 문항 묶음 + 톤). API `draft_session_id` = `draft_sessions.id`. `users.id` FK, `jobs.id` FK (nullable).
-
-| 컬럼 | 타입 | 설명 |
-|------|------|------|
-| `id` | TEXT PK | 세션 고유 ID (UUID). API `draft_session_id`에 대응 |
-| `user_id` | TEXT FK | users.id |
-| `job_id` | TEXT FK | jobs.id (nullable, 공고 없으면 NULL) |
-| `tone` | TEXT | professional \| friendly \| concise |
-| `created_at` | DATETIME | |
-| `updated_at` | DATETIME | |
-
-### 2.3 cover_letter_items (문항 단위)
-
-한 세션 안의 개별 문항·초안·검수 이력. API `draft_id` = `cover_letter_items.id`. `draft_sessions.id` FK. `round` 필드로 Inspector 재첨삭 이력 관리 (0=최초 생성, 1=1차 검수 후 수정, …).
+자소서 문항 단위 저장. 문항(question)과 초안(answer)을 하나의 인스턴스로 관리. API `draft_id` = `drafts.id`. `users.id` FK, `jobs.id` FK (nullable).
 
 | 컬럼 | 타입 | 설명 |
 |------|------|------|
 | `id` | TEXT PK | 문항 고유 ID (UUID). API `draft_id`에 대응 |
-| `session_id` | TEXT FK | draft_sessions.id |
+| `user_id` | TEXT FK | users.id |
+| `job_id` | TEXT FK | jobs.id (nullable, 공고 없으면 NULL) |
 | `question_text` | TEXT | 문항 지문 |
 | `max_chars` | INTEGER | 최대 글자 수 |
-| `min_chars` | INTEGER | 최소 글자 수 (nullable) |
 | `answer` | TEXT | Writer 출력 또는 유저 수정본 |
 | `round` | INTEGER | Inspector 재첨삭 라운드 (0=최초) |
 | `thread_id` | TEXT | Inspector Human-in-the-loop checkpointer thread_id |
 | `created_at` | DATETIME | |
 | `updated_at` | DATETIME | |
 
-### 2.4 jobs (공고 파싱·직접입력 저장)
+### 2.3 jobs (공고 파싱·직접입력 저장)
 
 POST /api/jobs/parse 호출 시 항상 저장된다.  
-**source_type=url:** url 컬럼 기준으로 중복 체크, 동일 url 존재 시 캐시 반환.  
+**source_type=url:** url 컬럼 기준으로 신규 저장.  
 **source_type=manual:** url 없이 UUID로 id 생성, 항상 신규 저장.
 
 파싱 결과는 개별 컬럼으로 저장 (Nullable). 파싱 실패·부분 성공 시에도 저장 가능. Job Fit·Writer·Inspector·Portfolio에서 job_id로 조회해 재사용.
@@ -75,10 +62,9 @@ POST /api/jobs/parse 호출 시 항상 저장된다.
 | `company_name` | TEXT | Y | 기업명 |
 | `company_values` | TEXT | Y | 기업인재상 |
 | `position` | TEXT | Y | 포지션명 |
-| `questions` | TEXT | Y | 자기소개서 문항 목록 (JSON array of strings, 예: `["문항1", "문항2"]`) |
 | `created_at` | DATETIME | | 파싱 시각 |
 
-### 2.5 selected_repos (선택 레포)
+### 2.4 selected_repos (선택 레포)
 
 유저가 선택한 GitHub 레포. `repo_full_name`(owner/repo)으로 레포 구분. `users.id` FK.
 
@@ -89,7 +75,7 @@ POST /api/jobs/parse 호출 시 항상 저장된다.
 | `repo_full_name` | TEXT | owner/repo |
 | `created_at` | DATETIME | |
 
-### 2.6 asset_hierarchy (에셋 계층)
+### 2.5 asset_hierarchy (에셋 계층)
 
 RAPTOR 임베딩 시 파일·폴더가 어느 폴더에 속하는지 표현. 자기 참조 테이블. `selected_repos.id` FK.
 
@@ -108,7 +94,7 @@ RAPTOR 임베딩 시 파일·폴더가 어느 폴더에 속하는지 표현. 자
 - `asset_hierarchy.id` 값은 ChromaDB `user_assets_{user_id}` 컬렉션의 document id와 동일하게 설정하여 SQLite ↔ ChromaDB 조인을 가능하게 한다.
 - 임베딩은 반드시 **selected_repos**에 등록된 레포에 대해서만 수행된다. selected_repos에 없는 레포는 임베딩 API에서 **403** 반환.
 
-### 2.7 portfolios (포트폴리오)
+### 2.6 portfolios (포트폴리오)
 
 유저별 포트폴리오 메타데이터 및 생성 결과물. `users.id` FK.
 
@@ -117,7 +103,6 @@ RAPTOR 임베딩 시 파일·폴더가 어느 폴더에 속하는지 표현. 자
 | `id` | TEXT PK | 포트폴리오 고유 ID (UUID 등) |
 | `user_id` | TEXT FK | users.id |
 | `name` | TEXT | 포트폴리오명 |
-| `description` | TEXT | 설명 (Nullable) |
 | `content` | TEXT | 생성된 포트폴리오 (JSON/HTML). build_portfolio 노드 출력 (Nullable) |
 | `created_at` | DATETIME | 생성 시각 |
 | `updated_at` | DATETIME | 수정 시각 |
@@ -219,11 +204,10 @@ RAPTOR 임베딩 시 파일·폴더가 어느 폴더에 속하는지 표현. 자
 
 ```mermaid
 erDiagram
-    users ||--o{ draft_sessions : has
+    users ||--o{ drafts : has
     users ||--o{ selected_repos : has
     users ||--o{ portfolios : has
-    jobs ||--o{ draft_sessions : "job_id optional"
-    draft_sessions ||--o{ cover_letter_items : has
+    jobs ||--o{ drafts : "job_id optional"
     selected_repos ||--o{ asset_hierarchy : has
     asset_hierarchy ||--o{ asset_hierarchy : parent
 
@@ -235,21 +219,12 @@ erDiagram
         datetime updated_at
     }
 
-    draft_sessions {
+    drafts {
         text id PK
         text user_id FK
         text job_id FK
-        text tone
-        datetime created_at
-        datetime updated_at
-    }
-
-    cover_letter_items {
-        text id PK
-        text session_id FK
         text question_text
         int max_chars
-        int min_chars
         text answer
         int round
         text thread_id
@@ -266,7 +241,6 @@ erDiagram
         text company_name
         text company_values
         text position
-        text questions
         datetime created_at
     }
 
@@ -288,7 +262,6 @@ erDiagram
         text id PK
         text user_id FK
         text name
-        text description
         text content
         datetime created_at
         datetime updated_at
@@ -299,9 +272,8 @@ erDiagram
 
 ```
 users
-  ├── draft_sessions (user_id FK)
-  │       ├── job_id → jobs (선택)
-  │       └── cover_letter_items (session_id FK)
+  ├── drafts (user_id FK)
+  │       └── job_id → jobs (선택)
   ├── selected_repos (user_id FK)
   │       └── asset_hierarchy (selected_repo_id FK, parent_id 자기참조)
   └── portfolios (user_id FK)
@@ -334,3 +306,4 @@ jobs (독립)
 - 1.8: jobs 저장 정책 확정 — source_type=url(크롤링+파싱+저장, url 기준 캐시) / source_type=manual(직접입력+저장, UUID·신규). 이후 API는 job_id 단일 입력으로 통일.
 - 1.9: cover_letters → draft_sessions + cover_letter_items 분리. 다문항 자소서 지원을 위해 세션(공고+톤 단위)과 문항(개별 문항 단위)으로 분리. API 대응: draft_session_id = draft_sessions.id, draft_id = cover_letter_items.id. round 필드로 Inspector 재첨삭 이력 관리.
 - 1.10: asset_hierarchy 섹션에 임베딩 API 연동 동작 설명 추가. selected_repos 등록 레포만 임베딩 가능 정책 명시. asset_hierarchy.id = ChromaDB document id 동일 설정 원칙 추가.
+ - 1.11: PR 리뷰 반영. draft_sessions + cover_letter_items → drafts 단일 테이블 (MVP 단순화). tone, min_chars 제거. jobs.questions 제거. portfolios.description 제거. jobs 캐시 정책 제거 (항상 신규 저장). API draft_id = drafts.id. round + thread_id 유지 (Inspector Human-in-the-loop 포함).

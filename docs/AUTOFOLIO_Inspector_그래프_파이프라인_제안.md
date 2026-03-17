@@ -1,6 +1,6 @@
 # Inspector 그래프 파이프라인 제안
 
-**문서 버전:** 1.3  
+**문서 버전:** 1.4  
 **기준:** [AUTOFOLIO_LangGraph_설계.md](AUTOFOLIO_LangGraph_설계.md) §4, [AUTOFOLIO_RAG_파이프라인_핵심.md](AUTOFOLIO_RAG_파이프라인_핵심.md), [AUTOFOLIO_API_스펙.md](AUTOFOLIO_API_스펙.md)
 
 ---
@@ -163,14 +163,15 @@ compiled = graph.compile(checkpointer=..., interrupt_after=["suggest"])
 
 ```
 [클라이언트] POST /api/cover-letter/inspect
-    body: { "draft_session_id": "...", "answers": [ { "draft_id": "...", "answer": "..." }, ... ], "mode": "full_review"|"quick_check" (선택) }
-         │  세션 전체 문항 답변 한 번에 전달. draft_id는 draft 응답의 draft_id(cover_letter_items.id).
+    body: { "job_id": "..." (선택),
+            "answers": [ { "draft_id": "...", "answer": "..." }, ... ] }
+         │  draft_id는 POST /api/cover-letter/draft 응답의 draft_id (DB drafts.id에 대응).
          ▼
-[서버] 1. draft_session_id로 세션·문항 조회
-      2. 문항별로 Inspector 그래프 invoke (또는 배치). thread_id 있으면 checkpointer에서 상태 복원
+[서버] 1. answers[].draft_id로 DB drafts 테이블에서 문항 조회
+      2. 문항별로 Inspector 그래프 invoke. thread_id 있으면 checkpointer에서 상태 복원
          → 1차: load_draft → analyze → suggest → interrupt
          → 2차~: re_inspect → load_draft → analyze → suggest → interrupt / (round >= max) END
-      3. feedbacks[] (draft_id, question_text, score, score_label, strengths, weaknesses, suggestions) + overall_score, overall_score_label, inspected_at 반환
+      3. feedbacks[] (draft_id, question_text, score(0~100), strengths, weaknesses, suggestions) + overall_score(0~100), inspected_at 반환
 ```
 
 ---
@@ -215,3 +216,4 @@ src/graphs/inspector_graph/
 - 1.1: 기존 docs 정렬. load_draft로 통합, analyze→suggestions 직접 출력, suggest 패스스루. **에셋·합격 샘플 무조건 재조회** 반영.
 - 1.2: 플로우 다이어그램 수정. re_inspect → load_draft → analyze (load_draft 누락 보완).
 - 1.3: inspect API 다문항·세션 반영. 요청: draft_session_id + answers[] (draft_id, answer). 응답: feedbacks[] + overall_score, overall_score_label.
+- 1.4: PR 리뷰 반영. inspect API 연동: draft_session_id 제거 → answers[].draft_id로 DB drafts 직접 조회. score_label 제거, score 0~100 퍼센트로 변경.
