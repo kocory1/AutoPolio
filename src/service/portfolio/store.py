@@ -22,7 +22,6 @@ async def create_portfolio(
     user_id: str,
     content: dict,
     name: str = "auto-generated",
-    description: str = "",
     db_path: str | Path | None = None,
 ) -> dict:
     """포트폴리오를 저장하고 메타데이터를 반환한다."""
@@ -34,10 +33,10 @@ async def create_portfolio(
     try:
         await conn.execute(
             """
-            INSERT INTO portfolios (id, user_id, name, description, content, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO portfolios (id, user_id, name, content, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (portfolio_id, user_id, name, description, content_json, now, now),
+            (portfolio_id, user_id, name, content_json, now, now),
         )
         await conn.commit()
     finally:
