@@ -171,7 +171,7 @@ async def get_user_profile_summary(user_id: str) -> dict | None:
 
 - **portfolios** 테이블: 포트폴리오 메타데이터 (이름, 설명, content). 에셋 내용은 VectorDB에만 저장.
 - **selected_repos**: 임베딩 대상 레포 목록. `repo_full_name`(owner/repo)으로 레포 구분. VectorDB 인덱싱 시 참조. **임베딩 API는 selected_repos에 등록된 레포에 대해서만 호출 가능**하며, 미등록 레포는 403 반환 (상세: `API_GitHub_Spec.md` §5.1).
-- **asset_hierarchy** (SQLite): RAPTOR 계층(project/folder/code). embedding 호출 시 해당 레포의 행 전부 삭제 후 재생성. `asset_hierarchy.id` = ChromaDB document id와 동일.
+- **asset_hierarchy** (SQLite): RAPTOR 계층(project/folder/code). `id` = path SSoT(ChromaDB id와 동일). path 컬럼 없음, id에서 유도. embedding 시 해당 레포 행 전부 삭제 후 재생성.
 
 ---
 
