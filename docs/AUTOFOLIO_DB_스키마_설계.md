@@ -23,6 +23,9 @@
 |------|------|------|
 | `id` | TEXT PK | 유저 고유 ID (GitHub id 등) |
 | `github_username` | TEXT | GitHub 사용자명 |
+| `github_id` | INTEGER | GitHub 유저 numeric ID |
+| `email` | TEXT | GitHub 이메일(없을 수도 있음) |
+| `avatar_url` | TEXT | GitHub 프로필 이미지 URL |
 | `access_token` | TEXT | OAuth 토큰 (암호화 권장) |
 | `created_at` | DATETIME | 가입 시각 |
 | `updated_at` | DATETIME | 수정 시각 |
