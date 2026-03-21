@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Tuple
+from urllib.parse import quote
 
 import httpx
 
 GITHUB_API_BASE = "https://api.github.com"
+
+
+class GitHubTreeTruncatedError(Exception):
+    """GitHub GET /git/trees?recursive=1 응답에서 truncated=true 인 경우."""
+
+    def __init__(self, message: str = "GitHub tree response truncated (too large)") -> None:
+        super().__init__(message)
 
 _REPO_ID_DIGITS = re.compile(r"^\d+$")
 
@@ -105,19 +113,82 @@ async def list_user_repos(
     return {"repos": repos, "page": page, "per_page": per_page, "total_count": len(repos)}
 
 
+def _looks_like_git_commit_sha(ref: str) -> bool:
+    s = ref.strip().lower()
+    if len(s) < 7 or len(s) > 40:
+        return False
+    return all(c in "0123456789abcdef" for c in s)
+
+
+async def _get_default_branch(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    owner: str,
+    repo: str,
+) -> str:
+    url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}"
+    resp = await client.get(url, headers=headers, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    b = data.get("default_branch")
+    if not b:
+        raise ValueError("default_branch missing from repo")
+    return str(b)
+
+
+async def _get_commit_sha_from_branch(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    owner: str,
+    repo: str,
+    branch: str,
+) -> str:
+    enc = quote(branch, safe="")
+    url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/git/ref/heads/{enc}"
+    resp = await client.get(url, headers=headers, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    obj = data.get("object") or {}
+    sha = obj.get("sha")
+    if not sha:
+        raise ValueError("git ref heads: object.sha missing")
+    return str(sha)
+
+
+async def _get_tree_sha_from_commit(
+    client: httpx.AsyncClient,
+    headers: dict[str, str],
+    owner: str,
+    repo: str,
+    commit_sha: str,
+) -> str:
+    url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/git/commits/{commit_sha}"
+    resp = await client.get(url, headers=headers, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()
+    tree = data.get("tree") or {}
+    tsha = tree.get("sha")
+    if not tsha:
+        raise ValueError("git commit: tree.sha missing")
+    return str(tsha)
+
+
 async def list_repo_files_tree(
     access_token: str,
     *,
     owner: str,
     repo: str,
     path: str = "",
-    # depth=-1이면 GitHub에 있는 트리를 끝까지(단, traverse_cap까지) 순회한다.
+    # depth=-1이면 경로 깊이 필터 없음.
     depth: int = -1,
-    traverse_cap: int = 500,
     ref: str | None = None,
 ) -> Dict[str, Any]:
     """
-    Contents API를 재귀로 돌려 tree 형태로 반환한다.
+    Git Trees API(recursive=1)로 레포 전체 트리를 한 번에 가져와 반환한다.
+
+    - GET /repos/{owner}/{repo}/git/ref/heads/{branch} 로 커밋 SHA 조회 (또는 ref가 커밋 SHA면 직접 사용)
+    - GET /repos/{owner}/{repo}/git/commits/{sha} 로 tree SHA 조회
+    - GET /repos/{owner}/{repo}/git/trees/{tree_sha}?recursive=1
     """
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -127,66 +198,101 @@ async def list_repo_files_tree(
     normalized = _normalize_path(path)
     root = "/" if not normalized else f"{normalized}/"
 
-    tree: list[dict[str, Any]] = []
-    visited_nodes = 0
-    capped = False
+    async with httpx.AsyncClient() as client:
+        if ref is None:
+            branch_name = await _get_default_branch(client, headers, owner, repo)
+            commit_sha = await _get_commit_sha_from_branch(
+                client, headers, owner, repo, branch_name
+            )
+            resolved_ref = branch_name
+        elif _looks_like_git_commit_sha(ref):
+            commit_sha = ref.strip().lower()
+            resolved_ref = commit_sha
+        else:
+            commit_sha = await _get_commit_sha_from_branch(
+                client, headers, owner, repo, ref
+            )
+            resolved_ref = ref
 
-    # remaining<=0이면 더 깊게 내려가지 않는다.
-    # depth=-1이면 remaining=None으로 무제한 순회(단, traverse_cap까지)로 처리한다.
-    remaining0: int | None = depth if depth >= 0 else None
-
-    async def _walk(
-        current_path: str,
-        current_depth_remaining: int | None,
-    ) -> None:
-        nonlocal visited_nodes, capped
-        if capped or visited_nodes >= traverse_cap:
-            return
-
-        url = (
-            f"{GITHUB_API_BASE}/repos/{owner}/{repo}/contents"
-            if not current_path
-            else f"{GITHUB_API_BASE}/repos/{owner}/{repo}/contents/{current_path}"
+        tree_sha = await _get_tree_sha_from_commit(
+            client, headers, owner, repo, commit_sha
         )
-        params: dict[str, str] = {}
-        if ref:
-            params["ref"] = ref
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url, headers=headers, params=params, timeout=10)
-            resp.raise_for_status()
-            items = resp.json()
+        tree_url = f"{GITHUB_API_BASE}/repos/{owner}/{repo}/git/trees/{tree_sha}"
+        resp = await client.get(
+            tree_url,
+            headers=headers,
+            params={"recursive": "1"},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        data = resp.json()
 
-        items_list: list[dict[str, Any]] = items if isinstance(items, list) else [items]
-        for item in items_list:
-            if capped or visited_nodes >= traverse_cap:
-                capped = True
-                break
+    if data.get("truncated") is True:
+        raise GitHubTreeTruncatedError()
 
-            item_type = item.get("type")
-            item_path = item.get("path") or item.get("name")
-            if not item_type or not item_path:
-                continue
+    raw_tree: list[dict[str, Any]] = data.get("tree") or []
+    entries: list[dict[str, str]] = []
 
-            tree.append({"path": str(item_path), "type": str(item_type)})
-            visited_nodes += 1
+    for item in raw_tree:
+        t = item.get("type")
+        p = item.get("path")
+        if not p or not isinstance(p, str):
+            continue
+        if t == "blob":
+            entries.append({"path": p, "type": "file"})
+        elif t == "tree":
+            dir_path = p if p.endswith("/") else f"{p}/"
+            entries.append({"path": dir_path, "type": "dir"})
+        else:
+            continue
 
-            if item_type == "dir" and (current_depth_remaining is None or current_depth_remaining > 0):
-                next_remaining = (
-                    None if current_depth_remaining is None else current_depth_remaining - 1
-                )
-                await _walk(str(item_path), next_remaining)
+    def _path_for_match(e: dict[str, str]) -> str:
+        return e["path"].rstrip("/") if e["type"] == "dir" else e["path"]
 
-    await _walk(normalized, remaining0)
+    prefix_norm = normalized  # already no leading/trailing slashes
+
+    def _under_prefix(entry_path: str) -> bool:
+        if not prefix_norm:
+            return True
+        if entry_path == prefix_norm:
+            return True
+        return entry_path.startswith(prefix_norm + "/")
+
+    def _relative_to_prefix(entry_path: str) -> str | None:
+        if not prefix_norm:
+            return entry_path
+        if entry_path == prefix_norm:
+            return ""
+        if entry_path.startswith(prefix_norm + "/"):
+            return entry_path[len(prefix_norm) + 1 :]
+        return None
+
+    filtered_entries: list[dict[str, str]] = []
+    for e in entries:
+        ep = _path_for_match(e)
+        if not _under_prefix(ep):
+            continue
+        if depth < 0:
+            filtered_entries.append(e)
+            continue
+        rel = _relative_to_prefix(ep)
+        if rel is None:
+            continue
+        if rel.count("/") > depth:
+            continue
+        filtered_entries.append(e)
+
+    entries = filtered_entries
+
+    entries.sort(key=lambda x: x["path"])
 
     return {
         "repo_id": None,
-        "ref": ref,
+        "ref": resolved_ref,
         "root": root,
-        "tree": tree,
-        "traverse_cap": traverse_cap,
-        "visited_nodes": visited_nodes,
-        "capped": capped,
+        "tree": entries,
+        "visited_nodes": len(entries),
     }
 
 

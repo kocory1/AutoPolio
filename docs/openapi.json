@@ -358,7 +358,7 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "default": 2,
+              "default": -1,
               "title": "Depth"
             }
           },
@@ -601,6 +601,70 @@
                 "schema": {
                   "$ref": "#/components/schemas/HTTPValidationError"
                 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/user/selected-repo-assets": {
+      "get": {
+        "tags": [
+          "UserAssets"
+        ],
+        "summary": "Selected Repo Assets Get",
+        "operationId": "selected_repo_assets_get_api_user_selected_repo_assets_get",
+        "parameters": [
+          {
+            "name": "selected_repo_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Selected Repo Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "UserAssets"
+        ],
+        "summary": "Selected Repo Assets Put",
+        "operationId": "selected_repo_assets_put_api_user_selected_repo_assets_put",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           }

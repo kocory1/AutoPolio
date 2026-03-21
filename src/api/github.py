@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import List
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from src.db.sqlite.client import connect
 from src.service.git_hub import repos as github_repos
+from src.service.git_hub.repos import GitHubTreeTruncatedError
 from src.service.user.repos import (
     get_selected_repos_detailed,
     upsert_selected_repos,
@@ -147,9 +147,8 @@ async def github_repo_files(
     request: Request,
     repo_id: str,
     path: str = "/",
-    # depth=-1이면 “끝까지(단 traverse_cap까지)” 순회한다.
+    # depth=-1이면 경로 깊이 필터 없음.
     depth: int = -1,
-    traverse_cap: int = 500,
     ref: str | None = None,
 ) -> JSONResponse:
     try:
@@ -167,15 +166,19 @@ async def github_repo_files(
             repo=repo,
             path=path,
             depth=depth,
-            traverse_cap=traverse_cap,
             ref=ref,
         )
         # docs response에서 repo_id를 그대로 노출한다.
         result["repo_id"] = repo_id if repo_id else full_name
-        result["ref"] = ref
         return JSONResponse(result)
     except ValueError:
         return _error_response(400, "BAD_REQUEST", "Invalid repo_id")
+    except GitHubTreeTruncatedError as exc:
+        return _error_response(
+            502,
+            "GITHUB_UPSTREAM_ERROR",
+            f"GitHub tree truncated: {exc}",
+        )
     except Exception as exc:
         return _error_response(
             502,

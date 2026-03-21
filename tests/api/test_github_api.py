@@ -151,9 +151,7 @@ def test_repo_files_success(
                 "root": "/",
                 "ref": None,
                 "tree": [{"path": "src/", "type": "dir"}],
-                "traverse_cap": 500,
                 "visited_nodes": 1,
-                "capped": False,
             }
         ),
     ) as mock_list_repo_files_tree:
@@ -166,7 +164,6 @@ def test_repo_files_success(
     assert response.json()["repo_id"] == "owner/repo-a"
     assert response.json()["tree"][0]["path"] == "src/"
     assert mock_list_repo_files_tree.await_args.kwargs["depth"] == -1
-    assert mock_list_repo_files_tree.await_args.kwargs["traverse_cap"] == 500
     assert mock_list_repo_files_tree.await_args.kwargs["ref"] is None
 
 
