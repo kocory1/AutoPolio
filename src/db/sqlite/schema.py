@@ -10,7 +10,6 @@ import sqlite3
 
 import aiosqlite
 
-
 DDL_STATEMENTS: tuple[str, ...] = (
     """
     CREATE TABLE IF NOT EXISTS users (
@@ -34,7 +33,6 @@ DDL_STATEMENTS: tuple[str, ...] = (
         company_name TEXT,
         company_values TEXT,
         position TEXT,
-        questions TEXT,
         created_at DATETIME
     );
     """,
@@ -64,21 +62,19 @@ DDL_STATEMENTS: tuple[str, ...] = (
         id TEXT PRIMARY KEY,
         selected_repo_id INTEGER NOT NULL,
         type TEXT NOT NULL CHECK(type IN ('code', 'folder', 'project')),
-        parent_id TEXT,
-        FOREIGN KEY(selected_repo_id) REFERENCES selected_repos(id) ON DELETE CASCADE,
-        FOREIGN KEY(parent_id) REFERENCES asset_hierarchy(id)
+        FOREIGN KEY(selected_repo_id) REFERENCES selected_repos(id) ON DELETE CASCADE
     );
     """,
     """
-    CREATE TABLE IF NOT EXISTS cover_letters (
+    CREATE TABLE IF NOT EXISTS drafts (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
-        draft TEXT,
-        question TEXT,
-        max_chars INTEGER,
         job_id TEXT,
-        thread_id TEXT,
+        question_text TEXT,
+        max_chars INTEGER,
+        answer TEXT,
         round INTEGER,
+        thread_id TEXT,
         created_at DATETIME,
         updated_at DATETIME,
         FOREIGN KEY(user_id) REFERENCES users(id),
@@ -90,7 +86,6 @@ DDL_STATEMENTS: tuple[str, ...] = (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL,
         name TEXT,
-        description TEXT,
         content TEXT,
         created_at DATETIME,
         updated_at DATETIME,
@@ -98,12 +93,12 @@ DDL_STATEMENTS: tuple[str, ...] = (
     );
     """,
     """
-    CREATE INDEX IF NOT EXISTS idx_cover_letters_user_id
-    ON cover_letters(user_id);
+    CREATE INDEX IF NOT EXISTS idx_drafts_user_id
+    ON drafts(user_id);
     """,
     """
-    CREATE INDEX IF NOT EXISTS idx_cover_letters_job_id
-    ON cover_letters(job_id);
+    CREATE INDEX IF NOT EXISTS idx_drafts_job_id
+    ON drafts(job_id);
     """,
     """
     CREATE INDEX IF NOT EXISTS idx_selected_repos_user_id
@@ -116,10 +111,6 @@ DDL_STATEMENTS: tuple[str, ...] = (
     """
     CREATE INDEX IF NOT EXISTS idx_asset_hierarchy_selected_repo_id
     ON asset_hierarchy(selected_repo_id);
-    """,
-    """
-    CREATE INDEX IF NOT EXISTS idx_asset_hierarchy_parent_id
-    ON asset_hierarchy(parent_id);
     """,
     """
     CREATE INDEX IF NOT EXISTS idx_portfolios_user_id
@@ -178,4 +169,3 @@ async def create_all_tables_async(conn: aiosqlite.Connection) -> None:
     # 기존 DB에 컬럼이 없다면 ALTER TABLE로 보강한다.
     await _ensure_users_columns_async(conn)
     await conn.commit()
-
