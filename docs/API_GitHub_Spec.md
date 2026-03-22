@@ -190,11 +190,18 @@ curl -X PUT "https://example.com/api/user/selected-repos" \
 ### 3.1 GET `/api/github/repos/{repo_id}/files`
 
 - **설명:** 레포의 파일/디렉터리 트리 조회 (임베딩·포트폴리오 대상 선택용)
+- **구현:** GitHub **Git Trees API** 단일 `recursive=1` 호출로 전체 트리를 가져온 뒤, 서버에서 `path`·`depth`으로 필터링한다.
+  1. `ref`가 없으면 `GET /repos/{owner}/{repo}`로 `default_branch`를 구한다.
+  2. 브랜치명이면 `GET /repos/{owner}/{repo}/git/ref/heads/{branch}`로 커밋 SHA를 구한다. (커밋 SHA 형태면 `GET /repos/{owner}/{repo}/git/commits/{sha}`로 바로 사용)
+  3. `GET /repos/{owner}/{repo}/git/commits/{commit_sha}`로 **tree SHA**를 구한다.
+  4. `GET /repos/{owner}/{repo}/git/trees/{tree_sha}?recursive=1` 한 번으로 평탄(flat) 트리를 받는다.
+  5. GitHub 응답 `tree[]`에서 `type=blob` → `file`, `type=tree` → `dir`(경로는 디렉터리에 `/` 접미사)으로 매핑한다.
+  6. `truncated=true`이면 레포가 너무 커서 GitHub이 트리를 잘랐을 때이며, 이 경우 **502**를 반환한다.
 
 #### 1. Request Syntax
 
 ```bash
-curl -X GET "https://example.com/api/github/repos/123/files?path=/&depth=2&ref=main" \
+curl -X GET "https://example.com/api/github/repos/123/files?path=/&depth=-1&ref=main" \
   -H "Authorization: Bearer <app-session-token>"
 ```
 
@@ -210,9 +217,9 @@ curl -X GET "https://example.com/api/github/repos/123/files?path=/&depth=2&ref=m
 | 파라미터 | 타입 | 필수 | 설명 |
 |----------|------|------|------|
 | repo_id | integer \| string | Y | Path. GitHub 레포 numeric ID 또는 `"owner/name"` |
-| path | string | N | 조회 시작 디렉터리 경로, default="/" |
-| depth | integer | N | 탐색 최대 깊이, default=2 |
-| ref | string | N | 브랜치명 또는 커밋 SHA, default=레포 default_branch |
+| path | string | N | 조회 시작 디렉터리 경로, default="/" (해당 경로 하위만 필터) |
+| depth | integer | N | `path` 기준 상대 경로에서 `/` 개수 상한. `-1`이면 깊이 제한 없음 (default=-1) |
+| ref | string | N | 브랜치명 또는 커밋 SHA, 생략 시 레포 `default_branch` |
 
 #### 4. Response
 
@@ -228,7 +235,8 @@ curl -X GET "https://example.com/api/github/repos/123/files?path=/&depth=2&ref=m
     { "path": "src/app/", "type": "dir" },
     { "path": "src/app/main.py", "type": "file" },
     { "path": "README.md", "type": "file" }
-  ]
+  ],
+  "visited_nodes": 4
 }
 ```
 
@@ -238,7 +246,7 @@ curl -X GET "https://example.com/api/github/repos/123/files?path=/&depth=2&ref=m
 | 404 | NOT_FOUND | 레포 또는 경로 없음 |
 
 > 공통 에러(400/401/403/404/500/502)는 공통 규칙 참고.
-| 502 | GITHUB_UPSTREAM_ERROR | GitHub 트리 조회 실패 |
+| 502 | GITHUB_UPSTREAM_ERROR | GitHub 트리 조회 실패 또는 GitHub `truncated=true` (트리 과대) |
 
 ---
 

@@ -10,12 +10,12 @@
 
 ### 공통 규칙
 
-> 공통 요청 형식, 공통 에러 코드, score_label 기준은 `API_Common.md` 참고.
+> 공통 요청 형식, 공통 에러 코드는 `API_Common.md` 참고.
 
 - **인증 흐름:**  
-  `GET /api/auth/github/login` → 브라우저가 GitHub OAuth authorize URL로 이동 → 사용자 승인 →  
-  `GET /api/auth/github/callback`(code, state 수신) → 서버가 access_token 교환 및 세션 발급 →  
-  이후 `GET /api/me`로 현재 로그인 유저 확인, 다른 API는 세션 쿠키 또는 `Authorization: Bearer <app-session-token>`으로 호출.
+`GET /api/auth/github/login` → 브라우저가 GitHub OAuth authorize URL로 이동 → 사용자 승인 →  
+`GET /api/auth/github/callback`(code, state 수신) → 서버가 access_token 교환 및 세션 발급 →  
+이후 `GET /api/me`로 현재 로그인 유저 확인, 다른 API는 세션 쿠키 또는 `Authorization: Bearer <app-session-token>`으로 호출.
 
 -- **에러 응답 포맷(공통):**
 
@@ -42,9 +42,11 @@ curl -i -X GET "https://example.com/api/auth/github/login"
 
 #### 2. Request Header
 
-| Header | 설명 | 필수 |
-|--------|------|------|
-| (없음) | 쿠키/Authorization 불필요 | N |
+
+| Header | 설명                   | 필수  |
+| ------ | -------------------- | --- |
+| (없음)   | 쿠키/Authorization 불필요 | N   |
+
 
 #### 3. Request Element
 
@@ -53,11 +55,14 @@ curl -i -X GET "https://example.com/api/auth/github/login"
 #### 4. Response
 
 **302 Found**  
+
 - `Location` 헤더에 GitHub OAuth authorize URL이 담겨 해당 URL로 리다이렉트된다.
 
-| 상태코드 | error | 발생조건 |
-|----------|-------|----------|
-| 500 | INTERNAL_SERVER_ERROR | GitHub OAuth 환경변수(client_id 등) 미설정 |
+
+| 상태코드 | error                 | 발생조건                               |
+| ---- | --------------------- | ---------------------------------- |
+| 500  | INTERNAL_SERVER_ERROR | GitHub OAuth 환경변수(client_id 등) 미설정 |
+
 
 > 공통 에러(400/401/403/404/500/502)는 공통 규칙 참고.
 
@@ -77,27 +82,34 @@ curl -i -X GET "https://example.com/api/auth/github/callback?code=abc123&state=x
 
 #### 2. Request Header
 
-| Header | 설명 | 필수 |
-|--------|------|------|
-| (없음) | 쿠키/Authorization 불필요 | N |
+
+| Header | 설명                   | 필수  |
+| ------ | -------------------- | --- |
+| (없음)   | 쿠키/Authorization 불필요 | N   |
+
 
 #### 3. Request Element
 
-| 파라미터 | 타입 | 필수 | 설명 |
-|----------|------|------|------|
-| code | string | Y | GitHub에서 전달하는 인증 코드 |
-| state | string | Y | CSRF 방지용 검증 값 |
+
+| 파라미터  | 타입     | 필수  | 설명                  |
+| ----- | ------ | --- | ------------------- |
+| code  | string | Y   | GitHub에서 전달하는 인증 코드 |
+| state | string | Y   | CSRF 방지용 검증 값       |
+
 
 #### 4. Response
 
 **302 Found**  
+
 - `Location`: `/dashboard` (성공 시 앱 대시보드로 리다이렉트).  
 - `Set-Cookie` 헤더로 세션 쿠키 발급.
 
-| 상태코드 | error | 발생조건 |
-|----------|-------|----------|
-| 400 | BAD_REQUEST | state 불일치 또는 code 누락 |
-| 500 | INTERNAL_SERVER_ERROR | GitHub token API 오류 등 서버/외부 오류 |
+
+| 상태코드 | error                 | 발생조건                           |
+| ---- | --------------------- | ------------------------------ |
+| 400  | BAD_REQUEST           | state 불일치 또는 code 누락           |
+| 500  | INTERNAL_SERVER_ERROR | GitHub token API 오류 등 서버/외부 오류 |
+
 
 > 공통 에러(400/401/403/404/500/502)는 공통 규칙 참고.
 
@@ -118,9 +130,11 @@ curl -i -X GET "https://example.com/api/auth/logout" \
 
 #### 2. Request Header
 
-| Header | 설명 | 필수 |
-|--------|------|------|
-| Cookie | 세션 쿠키 (있으면 무효화 대상) | N |
+
+| Header | 설명                 | 필수  |
+| ------ | ------------------ | --- |
+| Cookie | 세션 쿠키 (있으면 무효화 대상) | N   |
+
 
 #### 3. Request Element
 
@@ -129,11 +143,14 @@ curl -i -X GET "https://example.com/api/auth/logout" \
 #### 4. Response
 
 **302 Found**  
+
 - `Location`: `/` (루트로 리다이렉트).
 
-| 상태코드 | error | 발생조건 |
-|----------|-------|----------|
-| (없음) | — | 에러 응답 없음, 항상 302 반환 |
+
+| 상태코드 | error | 발생조건                |
+| ---- | ----- | ------------------- |
+| (없음) | —     | 에러 응답 없음, 항상 302 반환 |
+
 
 ---
 
@@ -152,10 +169,12 @@ curl -X GET "https://example.com/api/me" \
 
 #### 2. Request Header
 
-| Header | 설명 | 필수 |
-|--------|------|------|
-| Cookie | 세션 쿠키 (인증된 경우) | Cookie 또는 Authorization 중 하나 필수 |
+
+| Header        | 설명                           | 필수                              |
+| ------------- | ---------------------------- | ------------------------------- |
+| Cookie        | 세션 쿠키 (인증된 경우)               | Cookie 또는 Authorization 중 하나 필수 |
 | Authorization | `Bearer <app-session-token>` | Cookie 또는 Authorization 중 하나 필수 |
+
 
 #### 3. Request Element
 
@@ -175,17 +194,21 @@ curl -X GET "https://example.com/api/me" \
 }
 ```
 
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| user_id | string | 내부 사용자 식별자 |
-| github_login | string | GitHub 로그인 아이디 |
-| github_id | integer | GitHub 유저 numeric ID |
-| email | string | 이메일 주소 |
-| avatar_url | string | 프로필 이미지 URL |
 
-| 상태코드 | error | 발생조건 |
-|----------|-------|----------|
-| 401 | UNAUTHORIZED | 세션 없음 또는 만료 |
+| 필드           | 타입      | 설명                   |
+| ------------ | ------- | -------------------- |
+| user_id      | string  | 내부 사용자 식별자           |
+| github_login | string  | GitHub 로그인 아이디       |
+| github_id    | integer | GitHub 유저 numeric ID |
+| email        | string  | 이메일 주소               |
+| avatar_url   | string  | 프로필 이미지 URL          |
+
+
+
+| 상태코드 | error        | 발생조건        |
+| ---- | ------------ | ----------- |
+| 401  | UNAUTHORIZED | 세션 없음 또는 만료 |
+
 
 > 공통 에러(400/401/403/404/500/502)는 공통 규칙 참고.
 
