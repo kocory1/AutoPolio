@@ -1,13 +1,13 @@
 # GitHub 임베딩 구현 계획
 
-**문서 버전:** 2.2  
+**문서 버전:** 2.4  
 **기준:** [AUTOFOLIO_임베딩전략.md](AUTOFOLIO_임베딩전략.md), [AUTOFOLIO_User_Asset_스키마_설계.md](AUTOFOLIO_User_Asset_스키마_설계.md), [AUTOFOLIO_DB_스키마_설계.md](AUTOFOLIO_DB_스키마_설계.md), [API_GitHub_Spec.md](API_GitHub_Spec.md), [week3-oauth-repo-list.md](../week-issues/week3-oauth-repo-list.md) § asset_hierarchy path 설계 근거
 
 ---
 
 ## 1. 목표
 
-- **트리거:** `POST /api/github/repos/{repo_id}/embedding` 호출 시, 해당 레포의 코드·폴더·프로젝트 청크를 RAPTOR 방식으로 생성해 ChromaDB `user_assets_{user_id}`에 저장.
+- **트리거:** `POST /api/github/repos/{repo_id}/embedding` 호출 시, **이미 SQLite `asset_hierarchy`에 올라와 있는 유저 선택(경로)**을 기준으로 ChromaDB `user_assets_{user_id}`에 벡터를 저장한다. (RAPTOR 시 folder·project 청크는 파이프라인이 만들고, 해당 노드도 `asset_hierarchy`에 반영한다.)
 - **제약:** 레포는 해당 유저의 `selected_repos`에 등록된 경우에만 임베딩 허용. 미등록 시 403.
 - **결과:** 포트폴리오 그래프의 `retrieve_user_assets(source_filter=["github"])`로 GitHub 청크 조회 가능.
 
@@ -20,7 +20,8 @@
 - **컬럼:** `id`(PK), `selected_repo_id`(FK), `type` 만 존재. path 전용 컬럼 없음.
 - **id:** 경로 자체를 id로 사용. 예: `owner/repo/src/auth/login.py`. ChromaDB document id와 동일.  
   GitHub Contents API에 쓸 path는 id에서 `owner/repo/`(또는 `owner/repo`) 제거해 유도.
-- **채우는 시점:** 임베딩 시 해당 `selected_repo_id` 행 전부 삭제 후 재생성.
+- **채우는 시점(유저 선택):** **GitHub·User 관련 API**에서 유저가 임베딩할 파일·폴더(또는 펼쳐진 파일 목록)를 확정할 때 `type=code` 등으로 **먼저** 반영한다. 유저가 고른 것만 대상이므로 **임베딩 단계에서 별도 노이즈 필터·전체 트리 스캔으로 걸러내지 않는다.**
+- **임베딩 이후:** RAPTOR로 생성한 `folder`·`project` 노드는 같은 테이블에 **추가**(또는 재임베딩 시 해당 레포의 folder/project 행만 갱신). code 행은 유저 선택 API가 SSoT이면 임베딩이 임의로 지우지 않는다(재선택 시 선택 API에서 정리).
 
 ### 2.2 ChromaDB User Asset
 
@@ -32,14 +33,20 @@
 
 ### 2.3 임베딩 전략 (RAPTOR)
 
-- 트리 수집 → 노이즈 필터 → code(본인 커밋만 문서상 정의, MVP에서 생략 가능) → folder bottom-up 요약 → project 루트 요약.
+- **임베딩 API(모델·제공자):** 구현에서 선택한다. 벡터 차원은 선택한 모델에 맞춘다. **본 문서는 모델명·차원을 규정하지 않는다.**
+- **대상 목록:** `asset_hierarchy`에서 해당 `selected_repo_id`·`type=code`인 행의 `id`를 순회한다. **노이즈 필터는 두지 않는다**(선택은 유저·선택 API가 담당).
+- **POST body `paths[]`:** API 명세상 필드가 있을 수 있으나, 구현 우선순위는 **DB에 반영된 선택**이다. `paths[]`만으로 트리를 다시 훑는 방식과 병행하지 않는 것을 권장(중복·불일치 방지). 명세 정리는 별도 이슈로 API_GitHub_Spec과 맞출 수 있다.
+- **계층 임베딩 순서:**  
+  1. **파일(code) 단위:** 대상 blob마다 내용을 읽어 각각 임베딩(또는 document 생성 후 임베딩).  
+  2. **경로 `/` 기준 bottom-up:** 레포 내 `path`를 `/`로 분해해 **가장 깊은 디렉터리부터** 상위로 올라가며, **같은 직계 부모 디렉터리**에 속한 청크(직접 하위 파일의 code, 또는 이미 만든 하위 folder 요약)를 묶어 LLM 요약 → `type=folder` 임베딩. **더 이상 상위 경로(부모)가 없을 때** 마지막 단계로 `type=project`(루트) 요약·임베딩.
 - code: document = summary 우선, 없으면 content(truncate).  
   folder/project: document = LLM 요약.
+- 본인 커밋만 필터는 [AUTOFOLIO_임베딩전략.md](AUTOFOLIO_임베딩전략.md)에 정의되어 있으나 MVP에서 생략 가능.
 
 ### 2.4 API (POST embedding)
 
-- **Request:** paths(필수), branch, strategy, force_refresh.  
-  paths 규칙: `"/"` = 레포 전체, `"src/"` = 해당 폴더 하위 재귀, `"src/main.py"` = 해당 파일만.
+- **Request:** branch, strategy, force_refresh 등. **`paths[]`는 asset_hierarchy를 쓰는 구현에서는 생략 가능**(또는 무시) — 실제 대상은 DB의 `id` 목록.
+- (레거시·명세) `paths[]`가 있는 경우: 선택 API와의 이중 입력이 되지 않도록 팀에서 한 가지 SSoT로 통일할 것.
 - **Response:** status, embedding(chunks_indexed, dimensions, total_tokens, storage), hierarchy_nodes_created.
 - **전제:** selected_repos에 해당 repo 없으면 403.
 - **저장소 표현:** 실제 저장은 ChromaDB 컬렉션 `user_assets_{user_id}` 하나뿐이며, `metadata.repo`로 레포 구분. API 응답의 `embedding.storage.index_name`(예: `autofolio_github_repo_123_main`)은 레포·브랜치 식별용 **논리 이름**이며, ChromaDB 컬렉션명과는 다름.
@@ -53,22 +60,22 @@
 | 순서 | 작업 | 설명 |
 |------|------|------|
 | 1.1 | 유저·레포 검증 | 인증된 user_id로 `get_selected_repos(user_id)` 호출. repo_id(또는 owner/name)가 반환 목록에 없으면 403. |
-| 1.2 | 임베딩 클라이언트 | 텍스트 리스트 → 벡터 리스트. 문서/기존 코드와 동일 차원(예: 1536) 사용. |
+| 1.2 | 임베딩 클라이언트 | 텍스트 리스트 → 벡터 리스트. 사용 모델의 차원에 맞춤(모델 선택은 구현 담당, 본 문서 비규정). |
 | 1.3 | ChromaDB upsert | `user_assets_{user_id}` 컬렉션에 id/document/metadata/embedding 추가. 동일 id는 덮어쓰기(upsert). |
 
 **산출물:** selected_repos 검증 로직, embed 함수/클래스, ChromaDB add(upsert) 호출 래퍼.
 
 ---
 
-### Phase 2: 트리 수집·노이즈 필터
+### Phase 2: 임베딩 대상 로드 (SQLite)
 
 | 순서 | 작업 | 설명 |
 |------|------|------|
-| 2.1 | 트리 수집 | GitHub `GET /repos/{owner}/{repo}/git/trees/{tree_sha}?recursive=1`. ref = branch 또는 default_branch. |
-| 2.2 | paths 확장 | API paths 규칙 적용: `"/"` → 전체 blob 경로, `"src/"` → 해당 prefix blob 경로, 단일 파일 → 해당 path만. |
-| 2.3 | 노이즈 필터 | 제외: node_modules/, .git/, __pycache__, *.lock 등. 포함: 소스 확장자, README 등. (임베딩전략 §4) |
+| 2.1 | `asset_hierarchy` 조회 | 해당 레포의 `selected_repo_id`에 대해 `type=code`인 행만 조회. 각 행의 `id`가 Chroma document id이자 Contents API용 레포 내 path를 유도하는 SSoT. |
+| 2.2 | 빈 선택 처리 | code 행이 없으면 400 등으로 명확히 실패(또는 no-op 정책은 팀 합의). |
+| 2.3 | (선택) 유효성 | 읽기 불가·과대용량 파일은 **스킵 또는 truncate**만 적용(노이즈 **룰베이스 경로 필터는 사용하지 않음**). |
 
-**산출물:** 트리 조회 함수, paths → 대상 blob path 목록 변환, 필터 적용 후 최종 path 목록.
+**산출물:** 임베딩할 `(id, selected_repo_id)` 목록. **Trees API로 전체 트리를 받아 필터링하는 단계는 사용하지 않는다.**
 
 ---
 
@@ -94,13 +101,13 @@
 
 ---
 
-### Phase 5: folder / project (RAPTOR Bottom-up)
+### Phase 5: folder / project (RAPTOR Bottom-up, `/` 기준)
 
 | 순서 | 작업 | 설명 |
 |------|------|------|
-| 5.1 | 폴더 경로 유도 | code path 목록에서 디렉터리 경로 추출. 예: `src/auth/login.py` → `src/`, `src/auth/`. |
-| 5.2 | folder 청크 | 각 폴더별 하위 code document(또는 요약)를 모아 LLM으로 폴더 요약 생성. id = `owner/repo/src/auth`, document = 요약, metadata path = `src/auth`. |
-| 5.3 | project 청크 | 루트 하위 folder 요약을 모아 LLM으로 프로젝트 요약. id = `owner/repo/`, path = `"/"`. |
+| 5.1 | 깊이 순 정렬 | code(및 필요 시 중간 folder)의 레포 내 `path`로부터 **부모 디렉터리**를 `/` 단위로 파악. **가장 깊은 디렉터리부터** 상위로 처리할 순서를 만든다. |
+| 5.2 | folder 청크(단계 반복) | 각 디렉터리마다 **직계 하위**에 해당하는 청크만 묶는다: 직접 포함된 code 파일의 document(또는 요약), 그리고 이미 생성한 **직계 하위 folder**의 요약. 이 묶음으로 LLM 폴더 요약 → `type=folder` document → 임베딩. id = `owner/repo/{dir}`, metadata path = 레포 내 디렉터리 경로(예: `src/auth`). |
+| 5.3 | project 청크 | 루트(`"/"`) 직계에 해당하는 folder(및 루트에만 있는 code 등)를 묶어 LLM 프로젝트 요약. id = `owner/repo/`, metadata path = `"/"`. |
 | 5.4 | 임베딩 벡터 생성 | folder/project document → embed → 청크별 id, document, metadata, embedding을 메모리상 리스트로 확보. **ChromaDB 반영은 하지 않음.** 실제 DB 반영은 Phase 6.2(일괄 add)에서만 수행. |
 
 **산출물:** folder/project 청크 리스트(id, document, metadata, embedding 포함). ChromaDB 쓰기는 Phase 6에서만. (MVP에서 code만 먼저 하고 5는 후순위 가능.)
@@ -109,15 +116,15 @@
 
 ### Phase 6: ChromaDB·asset_hierarchy 정리
 
-**실행 순서:** 4·5에서는 청크 리스트와 임베딩 벡터만 생성하고 DB에는 쓰지 않는다. ChromaDB 반영은 여기서만 수행: **6.1(삭제) → 6.2(일괄 add)**.
+**실행 순서:** 4·5에서는 청크 리스트와 임베딩 벡터만 생성하고 Chroma에는 아직 쓰지 않는다. ChromaDB 반영은 **6.1(삭제) → 6.2(일괄 add)**.
 
 | 순서 | 작업 | 설명 |
 |------|------|------|
-| 6.1 | 해당 repo 기존 청크 삭제 | ChromaDB `user_assets_{user_id}`에서 해당 repo 청크만 삭제. id prefix가 `{repo_full_name}/` 인 항목 삭제 또는 metadata.repo 필터 후 삭제. |
-| 6.2 | 새 청크 일괄 add | Phase 4·5에서 만든 청크 리스트(id, document, metadata, embedding)를 ChromaDB에 일괄 add. |
-| 6.3 | asset_hierarchy 재생성 | 해당 `selected_repo_id`에 대한 기존 행 전부 삭제. 각 청크마다 (id, selected_repo_id, type) insert. parent_id·path 컬럼 없음. |
+| 6.1 | 해당 repo 기존 Chroma 청크 삭제 | `user_assets_{user_id}`에서 해당 `repo_full_name` 청크만 삭제(id prefix 또는 metadata.repo). |
+| 6.2 | 새 청크 일괄 add | Phase 4·5에서 만든 code·folder·project 청크를 Chroma에 일괄 add. |
+| 6.3 | asset_hierarchy(folder·project) 동기화 | **code 행은 유저 선택 API가 이미 넣었으므로 임베딩이 일괄 삭제하지 않는다.** RAPTOR로 생긴 `folder`·`project` 행만 insert 또는 기존 folder/project 행 삭제 후 재삽입(재임베딩 시 하위 요약이 바뀌므로). |
 
-**산출물:** repo 단위 ChromaDB 삭제+add, asset_hierarchy 삭제 후 (id, selected_repo_id, type) insert.
+**산출물:** repo 단위 Chroma 삭제+add, SQLite는 **folder/project 노드 정리 + code 행 유지(선택 API SSoT)**.
 
 ---
 
@@ -126,7 +133,7 @@
 | 순서 | 작업 | 설명 |
 |------|------|------|
 | 7.1 | POST /api/github/repos/{repo_id}/embedding | 인증 → Phase 1.1 검증 → 2~6 순서 실행 → 200 + status, embedding(chunks_indexed, dimensions, total_tokens, storage), hierarchy_nodes_created. |
-| 7.2 | 에러 매핑 | 400(paths 비어 있음 등), 401, 403(레포 미선택), 404, 409(진행 중), 502. API_GitHub_Spec §5 준수. |
+| 7.2 | 에러 매핑 | 400(asset_hierarchy에 code 행 없음, 또는 명세상 paths 누락 등), 401, 403(레포 미선택), 404, 409(진행 중), 502. **API_GitHub_Spec §5**의 `paths[]` 필수 여부는 asset_hierarchy SSoT로 바꿀 경우 명세 개정과 맞출 것. |
 
 **산출물:** 라우터, main에 등록. (GET embedding/status는 API 명세에서 삭제됨·구현하지 않음.)
 
@@ -148,12 +155,11 @@
 ```
 src/
 ├── api/
-│   └── github.py                 # POST embedding
+│   └── github.py                 # POST embedding (+ 선택 API는 asset_hierarchy 반영)
 ├── service/
 │   ├── github/
-│   │   ├── tree.py               # 트리 수집 (Trees API)
-│   │   ├── filter.py             # paths 확장 + 노이즈 필터
-│   │   ├── contents.py           # 파일 내용 조회
+│   │   ├── hierarchy.py          # asset_hierarchy 조회·folder/project 반영
+│   │   ├── contents.py           # id → GitHub Contents 조회
 │   │   └── embedding.py          # orchestration: 2~6 호출
 │   └── rag/
 │       └── user_assets.py        # 기존 retrieve_user_assets
@@ -169,13 +175,13 @@ src/
 
 | 포함 | 제외(후순위) |
 |------|----------------|
-| selected_repos 검증, Trees API 트리 수집, paths 확장, 노이즈 필터 | 본인 커밋만 필터 |
+| selected_repos 검증, asset_hierarchy에서 code id 로드, Contents로 내용 조회 | 본인 커밋만 필터 |
 | code 청크만: content(truncate) → embed → ChromaDB | folder/project LLM 요약 |
-| ChromaDB repo 단위 삭제 후 code add | |
-| asset_hierarchy 해당 selected_repo_id 삭제 후 (id, selected_repo_id, type) insert | |
+| ChromaDB repo 단위 삭제 후 add | |
+| 선택 API로 asset_hierarchy(code) 선반영 / 임베딩 후 folder·project 행 반영 | |
 | POST embedding 동기, 200 + chunks_indexed, hierarchy_nodes_created | (GET embedding/status 없음 — 명세 삭제) |
 
-**1차 목표:** POST 한 번으로 해당 레포 코드 파일이 `user_assets_{user_id}`에 code로 들어가고, `retrieve_user_assets(source_filter=["github"])`로 조회되는 것까지 검증.
+**1차 목표:** 선택 API로 `asset_hierarchy`에 code id가 쌓인 뒤, POST 한 번으로 해당 id들이 `user_assets_{user_id}`에 code로 들어가고, `retrieve_user_assets(source_filter=["github"])`로 조회되는 것까지 검증.
 
 ---
 
@@ -194,3 +200,5 @@ src/
 - 2.0: GitHub 임베딩 구현 단계·MVP 범위 정리. Phase 1~7, id/path 규칙 정리.
 - 2.1: Phase 6 실행 순서 명확화 — 4·5는 청크·임베딩만 생성, ChromaDB 반영은 6.1(삭제) 후 6.2(일괄 add)에서만 수행. API 응답 index_name vs 실제 컬렉션명(user_assets_{user_id}) 안내 추가. 문서 이력 섹션 추가.
 - 2.2: GET embedding/status 삭제 — API 명세(week3)에서 제거됨에 따라 Phase 7·디렉터리·MVP 범위에서 제거. 문서 기준(API_GitHub_Spec §5)으로 진행.
+- 2.3: 임베딩 모델 비규정. 노이즈 필터 — 넓은 스코프는 룰베이스 컷, paths 명시 시 해당 범위는 전부 인덱싱 원칙. RAPTOR: 파일 단위 code 후 `/` 기준 bottom-up folder → project 명시.
+- 2.4: **asset_hierarchy는 GitHub·User 선택 API에서 code 행 선반영.** 임베딩은 DB `id`만 따라가며 노이즈 필터·전체 트리 스캔 없음. Phase 2를 SQLite 로드로 전환. Phase 6.3는 code 행 유지·folder/project만 동기화. `paths[]`와의 관계 명시.

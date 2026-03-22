@@ -206,3 +206,59 @@ def test_selected_repo_assets_put_and_get_roundtrip(
         {"asset_type": "folder", "repo_path": "src"},
     ]
 
+
+def test_asset_hierarchy_sync_requires_session(client: TestClient) -> None:
+    r = client.post(
+        "/api/user/asset-hierarchy/sync-from-assets",
+        json={"selected_repo_id": 1},
+    )
+    assert r.status_code == 401
+
+
+def test_asset_hierarchy_sync_inserts_code_rows(
+    client: TestClient,
+    db_with_selected_repos: dict,
+) -> None:
+    _set_session(client, {"user_id": "u1"})
+    sid = db_with_selected_repos["u1_selected_repo_id"]
+
+    put = client.put(
+        "/api/user/selected-repo-assets",
+        json={
+            "selected_repo_id": sid,
+            "assets": [
+                {"asset_type": "code", "repo_path": "src/a.py"},
+                {"asset_type": "folder", "repo_path": "lib"},
+            ],
+        },
+    )
+    assert put.status_code == 200
+
+    sync = client.post(
+        "/api/user/asset-hierarchy/sync-from-assets",
+        json={"selected_repo_id": sid},
+    )
+    assert sync.status_code == 200
+    body = sync.json()
+    assert body["inserted"] == 1
+    assert body["ids"] == ["owner/repo-a/src/a.py"]
+
+    async def check_db() -> list[str]:
+        conn = await connect(db_with_selected_repos["db_path"])
+        try:
+            cur = await conn.execute(
+                """
+                SELECT id FROM asset_hierarchy
+                WHERE selected_repo_id = ? AND type = 'code'
+                ORDER BY id
+                """,
+                (sid,),
+            )
+            rows = await cur.fetchall()
+            await cur.close()
+            return [r["id"] for r in rows]
+        finally:
+            await conn.close()
+
+    assert _run(check_db()) == ["owner/repo-a/src/a.py"]
+

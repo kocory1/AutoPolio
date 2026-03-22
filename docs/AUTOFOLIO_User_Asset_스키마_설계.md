@@ -1,7 +1,7 @@
 # User Asset 스키마 설계 제안
 
-**문서 버전:** 1.4  
-**기준:** [AUTOFOLIO_임베딩전략.md](AUTOFOLIO_임베딩전략.md), [AUTOFOLIO_DB_스키마_설계.md](AUTOFOLIO_DB_스키마_설계.md), [AUTOFOLIO_RAG_파이프라인_핵심.md](AUTOFOLIO_RAG_파이프라인_핵심.md), [AUTOFOLIO_Writer_그래프_파이프라인_제안.md](AUTOFOLIO_Writer_그래프_파이프라인_제안.md), [AUTOFOLIO_Inspector_그래프_파이프라인_제안.md](AUTOFOLIO_Inspector_그래프_파이프라인_제안.md), [API_GitHub_Portfolio_Spec.md](API_GitHub_Portfolio_Spec.md)
+**문서 버전:** 1.6  
+**기준:** [AUTOFOLIO_임베딩전략.md](AUTOFOLIO_임베딩전략.md), [AUTOFOLIO_DB_스키마_설계.md](AUTOFOLIO_DB_스키마_설계.md), [AUTOFOLIO_GitHub_임베딩_구현_계획.md](AUTOFOLIO_GitHub_임베딩_구현_계획.md), [AUTOFOLIO_RAG_파이프라인_핵심.md](AUTOFOLIO_RAG_파이프라인_핵심.md), [AUTOFOLIO_Writer_그래프_파이프라인_제안.md](AUTOFOLIO_Writer_그래프_파이프라인_제안.md), [AUTOFOLIO_Inspector_그래프_파이프라인_제안.md](AUTOFOLIO_Inspector_그래프_파이프라인_제안.md), [API_GitHub_Portfolio_Spec.md](API_GitHub_Portfolio_Spec.md)
 
 ---
 
@@ -162,7 +162,7 @@ async def get_user_profile_summary(user_id: str) -> dict | None:
 
 | 소스 | 트리거 | 처리 |
 |------|--------|------|
-| **GitHub** | `POST /api/github/repos/{id}/embedding` | 트리 수집 → Noise Filtering → **본인 커밋 파일만** code 임베딩 → folder/project Bottom-up 요약·임베딩 → ChromaDB upsert. **selected_repos**에 등록된 레포만 가능(미등록 시 403). paths[]로 레포 전체/폴더/파일 지정. SQLite asset_hierarchy 동기 갱신. |
+| **GitHub** | `POST /api/github/repos/{id}/embedding` | **선택 API**로 미리 채운 **asset_hierarchy(`type=code`, `id`=path)** 를 읽어 파일 단위 임베딩 → 경로 `/` 기준 bottom-up folder·project → ChromaDB upsert + SQLite folder/project 반영. **노이즈 필터·전체 트리 스캔 없음.** 임베딩 모델은 구현 선택. **본인 커밋만**은 정책상 정의, MVP 생략 가능. **selected_repos** 등록 레포만(403). 상세: [AUTOFOLIO_GitHub_임베딩_구현_계획.md](AUTOFOLIO_GitHub_임베딩_구현_계획.md). |
 | **이력서/포트폴리오** | `POST /api/user/documents` | PDF·PPT 업로드 → OCR·전처리 → 청크 분할 → document 임베딩 → ChromaDB upsert (전체 요약 없음) |
 
 ---
@@ -171,7 +171,7 @@ async def get_user_profile_summary(user_id: str) -> dict | None:
 
 - **portfolios** 테이블: 포트폴리오 메타데이터 (이름, 설명, content). 에셋 내용은 VectorDB에만 저장.
 - **selected_repos**: 임베딩 대상 레포 목록. `repo_full_name`(owner/repo)으로 레포 구분. VectorDB 인덱싱 시 참조. **임베딩 API는 selected_repos에 등록된 레포에 대해서만 호출 가능**하며, 미등록 레포는 403 반환 (상세: `API_GitHub_Spec.md` §5.1).
-- **asset_hierarchy** (SQLite): RAPTOR 계층(project/folder/code). `id` = path SSoT(ChromaDB id와 동일). path 컬럼 없음, id에서 유도. embedding 시 해당 레포 행 전부 삭제 후 재생성.
+- **asset_hierarchy** (SQLite): RAPTOR 계층(project/folder/code). embedding 호출 시 해당 레포의 행 전부 삭제 후 재생성. `asset_hierarchy.id` = ChromaDB document id와 동일.
 
 ---
 
@@ -197,7 +197,7 @@ users (id)
 ## 7. 문서 관계
 
 - DB 스키마 전체: [AUTOFOLIO_DB_스키마_설계.md](AUTOFOLIO_DB_스키마_설계.md)
-- RAPTOR·임베딩 상세: [AUTOFOLIO_임베딩전략.md](AUTOFOLIO_임베딩전략.md)
+- RAPTOR·임베딩 상세: [AUTOFOLIO_임베딩전략.md](AUTOFOLIO_임베딩전략.md), [AUTOFOLIO_GitHub_임베딩_구현_계획.md](AUTOFOLIO_GitHub_임베딩_구현_계획.md)
 - Writer/Inspector 에셋 조회: [AUTOFOLIO_Writer_그래프_파이프라인_제안.md](AUTOFOLIO_Writer_그래프_파이프라인_제안.md) §4.2, [AUTOFOLIO_Inspector_그래프_파이프라인_제안.md](AUTOFOLIO_Inspector_그래프_파이프라인_제안.md) §4.1
 - API: [AUTOFOLIO_API_스펙.md](AUTOFOLIO_API_스펙.md), [API_GitHub_Portfolio_Spec.md](API_GitHub_Portfolio_Spec.md)
 
@@ -210,3 +210,5 @@ users (id)
 - 1.2: §2.4 임베딩 대상 상세화. code/document는 summary 우선·content fallback. 선택 기준 명시.
 - 1.3: user_selected_repos→selected_repos. DB 스키마 설계와 통합, §6 ER 다이어그램 업데이트.
 - 1.4: §3 조회 인터페이스 실제 구현 기준으로 업데이트 — async def, top_k=20, query/job_parsed 제거, PORTFOLIO_STAR_QUERIES 고정 쿼리 전략으로 변경. §2.6 포트폴리오 STAR 다중 쿼리 전략 추가.
+- 1.5: §4 GitHub 인덱싱 흐름을 임베딩전략·GitHub 임베딩 구현 계획과 정렬(룰베이스 노이즈 스코프, 파일 단위 code, `/` bottom-up, 모델 비규정, 본인 커밋 MVP 생략 가능).
+- 1.6: §4 — code 대상은 **선택 API + asset_hierarchy**; 임베딩은 DB `id`만 사용, 노이즈 필터 없음.

@@ -1,7 +1,7 @@
 # Autofolio 임베딩 전략
 
-**문서 버전:** 1.1  
-**기준:** [AUTOFOLIO_파이프라인.md](AUTOFOLIO_파이프라인.md), [AUTOFOLIO_User_Asset_스키마_설계.md](AUTOFOLIO_User_Asset_스키마_설계.md)
+**문서 버전:** 1.3  
+**기준:** [AUTOFOLIO_파이프라인.md](AUTOFOLIO_파이프라인.md), [AUTOFOLIO_User_Asset_스키마_설계.md](AUTOFOLIO_User_Asset_스키마_설계.md), [AUTOFOLIO_GitHub_임베딩_구현_계획.md](AUTOFOLIO_GitHub_임베딩_구현_계획.md)
 
 ---
 
@@ -79,26 +79,28 @@ login jwt oauth pg refund  crud search
 
 ## 4. 구현 흐름
 
+**임베딩 모델·API:** 구현에서 선택한다. 본 문서는 모델명·벡터 차원을 규정하지 않는다.
+
 ```
-1. GitHub API로 트리 구조 수집 (GET /repos/{owner}/{repo}/git/trees/{sha}?recursive=1)
+1. 대상 목록: SQLite **asset_hierarchy**에서 유저가 **GitHub·User 선택 API**로 넣어 둔 `type=code` 행의 `id`(= path SSoT)를 읽는다. **임베딩 단계에서 트리 전체를 받아 노이즈 필터링하지 않는다.**
 
-2. Noise Filtering
-   - 제외: node_modules/, .git/, __pycache__/, *.lock, 설정 파일 등
-   - 포함: 소스 코드 (*.py, *.js, *.ts, *.java 등), README, 문서
+2. (참고) UI에서 폴더를 고를 때 서버가 하위 파일 id를 펼쳐 `asset_hierarchy`에 넣는 것은 **선택 API** 책임.
 
-3. code 레벨: 각 소스 파일 (본인 커밋만)
-   - summary 우선 임베딩, 없으면 content (토큰 제한 시 truncate)
+3. code 레벨: 파일(blob) 단위
+   - 각 파일마다 document 생성(summary 우선, 없으면 content, 토큰 제한 시 truncate) 후 임베딩.
    - metadata: type, source, repo, path (MVP 4개)
+   - 본인 커밋만 필터는 정책상 정의되어 있으나 MVP에서 생략 가능(§6).
 
-4. folder 레벨: Bottom-up 재귀
-   - 하위 파일들의 요약/내용을 합침
-   - LLM으로 폴더 요약 생성
-   - 폴더 요약 → 임베딩
+4. folder 레벨: 경로 `/` 기준 Bottom-up
+   - 레포 내 path를 `/`로 분해해 가장 깊은 디렉터리부터 상위로 진행.
+   - 각 디렉터리에서 직계 하위 파일(code)과 이미 만든 직계 하위 folder 요약만 묶어 LLM 요약 → folder 임베딩.
+   - 동일 패턴을 부모가 없을 때까지 반복.
 
-5. project 레벨: 루트까지 반복
-   - 상위 폴더는 하위 폴더 요약들을 입력으로 받아 요약 생성
-   - 레포 루트 요약 → project type
+5. project 레벨
+   - 루트(`"/"`)에서 직계 하위 folder(및 루트 파일 등)를 묶어 레포 전체 요약 → project 임베딩.
 ```
+
+구현 단계별 세부는 [AUTOFOLIO_GitHub_임베딩_구현_계획.md](AUTOFOLIO_GitHub_임베딩_구현_계획.md) Phase 2~5를 따른다.
 
 ---
 
@@ -193,9 +195,11 @@ login jwt oauth pg refund  crud search
 | 항목 | 내용 |
 |------|------|
 | **전략** | 폴더 구조 기반 RAPTOR |
-| **code** | 소스 파일 임베딩. summary 우선, 없으면 content. 본인 커밋만. |
-| **folder** | 폴더별 LLM 요약 → 임베딩, bottom-up 재귀 |
-| **project** | 레포 루트 LLM 요약 → 임베딩 |
+| **임베딩 모델** | 구현 비규정(본 문서) |
+| **대상 선정** | **asset_hierarchy**(선택 API). 임베딩에서 경로 룰 필터 없음 |
+| **code** | 파일 단위 임베딩. summary 우선, 없으면 content. 본인 커밋만(정책, MVP 생략 가능). |
+| **folder** | `/` 기준 깊은 쪽부터 직계 하위만 묶어 LLM 요약 → 임베딩 |
+| **project** | 루트에서 한 번 더 요약·임베딩 |
 | **metadata** | type, source, repo, path (MVP 4개). [User_Asset](AUTOFOLIO_User_Asset_스키마_설계.md) §2.3 |
 | **장점** | 클러스터링 불필요, 직관적, 개발자 사고방식과 일치 |
 
@@ -205,6 +209,7 @@ login jwt oauth pg refund  crud search
 
 - 파이프라인: [AUTOFOLIO_파이프라인.md](AUTOFOLIO_파이프라인.md)
 - User Asset 스키마: [AUTOFOLIO_User_Asset_스키마_설계.md](AUTOFOLIO_User_Asset_스키마_설계.md)
+- GitHub 임베딩 구현 단계·API: [AUTOFOLIO_GitHub_임베딩_구현_계획.md](AUTOFOLIO_GitHub_임베딩_구현_계획.md)
 
 ---
 
@@ -212,3 +217,5 @@ login jwt oauth pg refund  crud search
 
 - 1.0 (2026-02-12): 초안 작성. 폴더 기반 RAPTOR 구조, 청크 스키마, 커밋 통합, 예외 처리 정의.
 - 1.1: User_Asset 스키마에 맞춤. type=code|folder|project, metadata MVP 4개, 본인 커밋만, summary 우선 임베딩.
+- 1.2: §4 구현 흐름 갱신 — 임베딩 모델 비규정, 노이즈 룰(스코프별), 파일 단위 code 후 `/` 기준 bottom-up folder→project. GitHub 구현 계획 문서와 교차 참조.
+- 1.3: §4·§9 — 임베딩 대상은 **asset_hierarchy**(GitHub·User 선택 API). 임베딩 단계 노이즈·전체 트리 스캔 제거.

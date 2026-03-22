@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from src.db.sqlite.client import connect
+from src.service.user.asset_hierarchy_sync import sync_code_rows_from_selected_assets
 from src.service.user.selected_assets import (
     get_selected_repo_assets,
     replace_selected_repo_assets,
@@ -119,4 +120,54 @@ async def selected_repo_assets_put(
         return JSONResponse({"selected_repo_assets": saved})
     finally:
         await conn.close()
+
+
+@router.post("/asset-hierarchy/sync-from-assets", response_model=None)
+async def asset_hierarchy_sync_from_assets(request: Request) -> JSONResponse:
+    """
+    ``selected_repo_assets``의 ``code`` 항목을 ``asset_hierarchy``(type=code)에 반영한다.
+
+    임베딩 API가 ``code_document_ids``를 비울 때 이 테이블을 읽도록 데모·개발 편의용.
+    """
+    try:
+        user_id = await _require_user_id(request)
+    except ValueError:
+        return _error_response(401, "UNAUTHORIZED", "UNAUTHORIZED")
+
+    body = await request.json()
+    selected_repo_id = body.get("selected_repo_id")
+    if not selected_repo_id:
+        return _error_response(400, "BAD_REQUEST", "selected_repo_id is required")
+
+    try:
+        selected_repo_id_int = int(selected_repo_id)
+    except Exception:
+        return _error_response(400, "BAD_REQUEST", "selected_repo_id must be integer")
+
+    conn = await connect()
+    try:
+        try:
+            await _require_selected_repo_belongs_to_user(
+                conn=conn,
+                selected_repo_id=selected_repo_id_int,
+                user_id=user_id,
+            )
+        except ValueError:
+            return _error_response(403, "FORBIDDEN", "SELECTED_REPO_NOT_FOUND")
+    finally:
+        await conn.close()
+
+    try:
+        result = await sync_code_rows_from_selected_assets(
+            selected_repo_id=selected_repo_id_int,
+            db_path=None,
+        )
+    except ValueError as exc:
+        if str(exc) == "SELECTED_REPO_NOT_FOUND":
+            return _error_response(404, "NOT_FOUND", str(exc))
+        return _error_response(400, "BAD_REQUEST", str(exc))
+    except Exception:
+        return _error_response(500, "INTERNAL_SERVER_ERROR", "ASSET_HIERARCHY_SYNC_FAILED")
+
+    return JSONResponse(result)
 
