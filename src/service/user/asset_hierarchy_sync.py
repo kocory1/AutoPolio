@@ -1,5 +1,7 @@
 """
 selected_repo_assets의 code 항목을 asset_hierarchy(code)에 반영 (데모·임베딩 SSoT).
+
+임베딩 잡 완료 후 folder/project 행을 Chroma ``ids``와 맞추는 동기화도 제공한다.
 """
 
 from __future__ import annotations
@@ -8,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from src.db.sqlite import connect
+from src.service.github_embedding.paths import split_chroma_document_id
 from src.service.user.selected_assets import get_selected_repo_assets
 
 
@@ -78,3 +81,87 @@ async def sync_code_rows_from_selected_assets(
         await conn.close()
 
     return {"inserted": len(inserted_ids), "ids": inserted_ids}
+
+
+def _folder_project_rows_from_embedding_ids(
+    repo_full_name: str,
+    code_document_ids: list[str],
+    result_ids: list[str],
+) -> list[tuple[str, str]]:
+    """
+    ``result_ids``(Chroma id 목록)에서 folder·project만 골라 ``(id, type)`` 로 반환한다.
+
+    code 경로는 ``code_document_ids``에서 분해한 상대 경로 집합으로 구분한다.
+    """
+    code_rels: set[str] = set()
+    for doc_id in code_document_ids:
+        r, rel = split_chroma_document_id(doc_id)
+        if r == repo_full_name:
+            code_rels.add(rel)
+
+    rows: list[tuple[str, str]] = []
+    for did in result_ids:
+        r, rel = split_chroma_document_id(did)
+        if r != repo_full_name:
+            continue
+        if rel == "/":
+            rows.append((did, "project"))
+        elif rel in code_rels:
+            continue
+        else:
+            rows.append((did, "folder"))
+    return rows
+
+
+async def sync_folder_project_rows_from_embedding_result(
+    *,
+    user_id: str,
+    repo_full_name: str,
+    code_document_ids: list[str],
+    result_ids: list[str],
+    db_path: str | Path | None = None,
+) -> None:
+    """
+    ``result_ids``에서 folder/project id만 추출한 뒤,
+    해당 ``selected_repo``의 ``type IN ('folder','project')`` 행을 삭제하고 다시 INSERT 한다.
+    """
+    conn = await connect(db_path)
+    try:
+        cur = await conn.execute(
+            """
+            SELECT id FROM selected_repos
+            WHERE user_id = ? AND repo_full_name = ?
+            """,
+            (user_id, repo_full_name),
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        if not row:
+            raise ValueError("SELECTED_REPO_NOT_FOUND")
+
+        selected_repo_id = int(row["id"])
+
+        await conn.execute(
+            """
+            DELETE FROM asset_hierarchy
+            WHERE selected_repo_id = ? AND type IN ('folder', 'project')
+            """,
+            (selected_repo_id,),
+        )
+
+        for doc_id, htype in _folder_project_rows_from_embedding_ids(
+            repo_full_name,
+            code_document_ids,
+            result_ids,
+        ):
+            await conn.execute(
+                """
+                INSERT INTO asset_hierarchy (id, selected_repo_id, type)
+                VALUES (?, ?, ?)
+                """,
+                (doc_id, selected_repo_id, htype),
+            )
+
+        await conn.commit()
+    finally:
+        await conn.close()
