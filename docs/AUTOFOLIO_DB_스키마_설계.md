@@ -1,6 +1,6 @@
 # Autofolio DB 스키마 설계
 
-**문서 버전:** 1.11  
+**문서 버전:** 1.13  
 **기준:** [AUTOFOLIO_RAG_파이프라인_핵심.md](AUTOFOLIO_RAG_파이프라인_핵심.md), [AUTOFOLIO_API_스펙.md](AUTOFOLIO_API_스펙.md), [AUTOFOLIO_합격자소서_벡터DB_스키마.md](AUTOFOLIO_합격자소서_벡터DB_스키마.md)
 
 ---
@@ -98,11 +98,13 @@ RAPTOR 임베딩 시 파일·폴더가 어느 폴더에 속하는지 표현. **p
 | `type`             | TEXT       | `code` \| `folder` \| `project`                                            |
 
 
-- **채우는 시점:** RAPTOR 임베딩 파이프라인에서 트리 수집 직후. 레포 재인덱싱 시 해당 `selected_repo_id` 행만 삭제 후 재생성.
+- **채우는 시점:**  
+  - **`type=code`(및 유저가 고른 범위):** GitHub·User 관련 **선택 API**에서 유저가 임베딩할 경로를 확정할 때 반영한다. `id`는 Chroma document id와 동일한 규칙(`owner/repo/...`)을 쓴다.  
+  - **`type=folder`·`project`:** RAPTOR 임베딩 파이프라인이 요약 청크를 만든 뒤 **추가·갱신**한다. 재임베딩 시 folder/project 행은 파이프라인이 다시 맞출 수 있다.
 
 **임베딩 API와의 연동:**
 
-- `POST /api/github/repos/{id}/embedding` 호출 시 해당 **selected_repo_id**의 asset_hierarchy 행을 전부 삭제 후 재생성한다.
+- `POST /api/github/repos/{id}/embedding`은 **이미 쌓인 `asset_hierarchy`의 code 행 `id`를 읽어** GitHub Contents로 내용을 가져와 임베딩한다. **전체 트리 수집·노이즈 필터로 code 목록을 만들지 않는다**(선택은 유저·선택 API가 담당). 상세: [AUTOFOLIO_GitHub_임베딩_구현_계획.md](AUTOFOLIO_GitHub_임베딩_구현_계획.md).
 - `asset_hierarchy.id` = ChromaDB `user_assets_{user_id}` document id와 동일.
 - 임베딩은 **selected_repos**에 등록된 레포만 허용. 미등록 시 **403**.
 
@@ -216,7 +218,7 @@ RAPTOR 임베딩 시 파일·폴더가 어느 폴더에 속하는지 표현. **p
 
 | 소스            | 트리거                                     | 처리                                                                             |
 | ------------- | --------------------------------------- | ------------------------------------------------------------------------------ |
-| **GitHub**    | `POST /api/github/repos/{id}/embedding` | 트리 수집 → 본인 커밋 파일만 code 임베딩 → folder/project Bottom-up 요약·임베딩 → ChromaDB upsert |
+| **GitHub**    | `POST /api/github/repos/{id}/embedding` | 선택 API로 채워진 **asset_hierarchy(code `id`)** 기준 → Contents로 파일 단위 임베딩 → `/` 기준 bottom-up folder·project → ChromaDB upsert + SQLite folder/project 반영. 노이즈 필터 없음. 상세: [AUTOFOLIO_GitHub_임베딩_구현_계획.md](AUTOFOLIO_GitHub_임베딩_구현_계획.md) |
 | **이력서/포트폴리오** | `POST /api/user/documents`              | PDF·PPT 업로드 → OCR·청크 분할 → document 임베딩 → ChromaDB upsert                       |
 
 
@@ -313,6 +315,7 @@ jobs (독립)
 
 - 합격 자소서 상세: [AUTOFOLIO_합격자소서_벡터DB_스키마.md](AUTOFOLIO_합격자소서_벡터DB_스키마.md)
 - User Asset 스키마: [AUTOFOLIO_User_Asset_스키마_설계.md](AUTOFOLIO_User_Asset_스키마_설계.md)
+- GitHub 임베딩 구현: [AUTOFOLIO_GitHub_임베딩_구현_계획.md](AUTOFOLIO_GitHub_임베딩_구현_계획.md)
 - User 프로필 임베딩: [AUTOFOLIO_임베딩전략.md](AUTOFOLIO_임베딩전략.md)
 - RAG 파이프라인: [AUTOFOLIO_RAG_파이프라인_핵심.md](AUTOFOLIO_RAG_파이프라인_핵심.md)
 - API 스펙: [AUTOFOLIO_API_스펙.md](AUTOFOLIO_API_스펙.md)
@@ -333,4 +336,6 @@ jobs (독립)
 - 1.9: cover_letters → draft_sessions + cover_letter_items 분리. 다문항 자소서 지원을 위해 세션(공고+톤 단위)과 문항(개별 문항 단위)으로 분리. API 대응: draft_session_id = draft_sessions.id, draft_id = cover_letter_items.id. round 필드로 Inspector 재첨삭 이력 관리.
 - 1.10: asset_hierarchy 섹션에 임베딩 API 연동 동작 설명 추가. selected_repos 등록 레포만 임베딩 가능 정책 명시. asset_hierarchy.id = ChromaDB document id 동일 설정 원칙 추가.
 - 1.11: PR 리뷰 반영. draft_sessions + cover_letter_items → drafts 단일 테이블 (MVP 단순화). tone, min_chars 제거. jobs.questions 제거. portfolios.description 제거. jobs 캐시 정책 제거 (항상 신규 저장). API draft_id = drafts.id. round + thread_id 유지 (Inspector Human-in-the-loop 포함).
+- 1.12: §4.4 GitHub 인덱싱 한 줄을 임베딩전략·GitHub 임베딩 구현 계획과 정렬. §6 문서 관계에 GitHub 임베딩 구현 계획 링크 추가.
+- 1.13: §2.5 asset_hierarchy — code는 GitHub·User 선택 API에서 채움, 임베딩은 DB `id`만 사용·노이즈 필터 없음. folder/project는 임베딩 파이프라인이 반영. §4.4 GitHub 셀 정렬.
 

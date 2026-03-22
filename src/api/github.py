@@ -3,19 +3,39 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, Body, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
+from pydantic import BaseModel, Field
 
 from src.db.sqlite.client import connect
 from src.service.git_hub import repos as github_repos
 from src.service.git_hub.repos import GitHubTreeTruncatedError
+from src.service.github_embedding.hierarchy import fetch_code_document_ids_for_repo
+from src.service.github_embedding.service import run_github_repo_embedding_job
 from src.service.user.repos import (
+    get_selected_repos,
     get_selected_repos_detailed,
     upsert_selected_repos,
 )
 
 
 router = APIRouter(prefix="/api", tags=["GitHub"])
+
+
+class GitHubEmbeddingRequestBody(BaseModel):
+    """
+    GitHub code 문서 id로 user_assets 임베딩을 트리거할 때 본문.
+
+    ``code_document_ids``가 비어 있으면 SQLite ``asset_hierarchy``에서
+    해당 레포의 ``type=code`` 행 ``id``를 읽는다(명세 SSoT).
+
+    ``include_summaries=True``이면 응답에 Chroma에 저장한 문서 본문(요약 텍스트)을
+    ``summaries`` 배열로 포함한다(데모·디버그용, 응답이 커질 수 있음).
+    """
+
+    code_document_ids: list[str] = Field(default_factory=list)
+    ref: str | None = None
+    include_summaries: bool = False
 
 
 def _error_response(status_code: int, error: str, message: str) -> JSONResponse:
@@ -292,4 +312,50 @@ async def github_repo_commits(
             "GITHUB_UPSTREAM_ERROR",
             f"GitHub commits fetch failed: {type(exc).__name__}: {exc}",
         )
+
+
+@router.post("/github/repos/{repo_id:path}/embedding")
+async def github_repo_embedding(
+    request: Request,
+    repo_id: str,
+    body: GitHubEmbeddingRequestBody = Body(...),
+) -> JSONResponse:
+    """선택된 레포에 대해 code Chroma id 목록 임베딩(삭제 후 재적재)을 실행한다."""
+    try:
+        user_id, access_token = await _require_access_token(request)
+    except ValueError:
+        return _error_response(401, "UNAUTHORIZED", "UNAUTHORIZED")
+
+    try:
+        _, _owner, _repo, full_name = await github_repos.resolve_repo_owner_repo(
+            access_token, repo_id
+        )
+    except ValueError:
+        return _error_response(400, "BAD_REQUEST", "Invalid repo_id")
+
+    selected = await get_selected_repos(user_id)
+    if full_name not in selected:
+        return _error_response(403, "FORBIDDEN", "REPO_NOT_SELECTED")
+
+    code_ids = list(body.code_document_ids or [])
+    if not code_ids:
+        code_ids = await fetch_code_document_ids_for_repo(user_id, full_name)
+    if not code_ids:
+        return _error_response(400, "BAD_REQUEST", "NO_CODE_ASSETS_IN_HIERARCHY")
+
+    try:
+        result = await run_github_repo_embedding_job(
+            user_id=user_id,
+            access_token=access_token,
+            repo_full_name=full_name,
+            code_document_ids=code_ids,
+            ref=body.ref,
+            include_summaries=body.include_summaries,
+        )
+    except ValueError as exc:
+        return _error_response(400, "BAD_REQUEST", str(exc))
+    except Exception:
+        return _error_response(500, "INTERNAL_SERVER_ERROR", "EMBEDDING_FAILED")
+
+    return JSONResponse({"status": "ok", **result})
 

@@ -12,13 +12,34 @@ dashboard_html = r"""
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Autofolio Dashboard (Dev)</title>
     <style>
-      body { font-family: sans-serif; padding: 16px; }
-      pre { background: #f6f6f6; padding: 12px; overflow-x: auto; }
-      button { padding: 10px 14px; margin-right: 8px; }
+      body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; padding: 16px; max-width: 960px; margin: 0 auto; color: #1e293b; }
+      pre { background: #f1f5f9; padding: 12px; overflow-x: auto; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px; }
+      button { padding: 10px 14px; margin-right: 8px; margin-bottom: 6px; border-radius: 6px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; }
+      button:hover { filter: brightness(0.97); }
+      hr { border: none; border-top: 1px solid #e2e8f0; margin: 28px 0; }
+      .demo-panel {
+        border: 1px solid #93c5fd;
+        border-radius: 12px;
+        padding: 20px 22px;
+        margin: 28px 0;
+        background: linear-gradient(165deg, #eff6ff 0%, #f8fafc 55%);
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.08);
+      }
+      .demo-panel h2 { margin-top: 0; color: #1e40af; font-size: 1.35rem; }
+      .demo-panel .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #2563eb; color: #fff; margin-right: 6px; vertical-align: middle; }
+      .demo-steps { margin: 12px 0 18px 1.2em; line-height: 1.65; color: #334155; }
+      .demo-steps li { margin-bottom: 6px; }
+      .btn-demo-primary { background: #2563eb !important; color: #fff !important; border-color: #1d4ed8 !important; font-weight: 600; }
+      .btn-demo-secondary { background: #475569 !important; color: #fff !important; border-color: #334155 !important; }
+      .btn-demo-ghost { background: #fff !important; border-color: #94a3b8 !important; color: #0f172a !important; }
+      #embeddingResult { min-height: 3rem; max-height: 480px; }
+      .hint { font-size: 0.9rem; color: #475569; margin: 8px 0 0 0; line-height: 1.5; }
+      .section-title { color: #0f172a; border-left: 4px solid #2563eb; padding-left: 10px; margin-top: 1.5rem; }
     </style>
   </head>
   <body>
     <h2>Autofolio Dev Dashboard</h2>
+    <p class="hint">OAuth · GitHub API · 선택 레포/assets · <strong>코드 임베딩(Chroma)</strong> 개발용 화면입니다.</p>
     <div style="margin-bottom: 12px;">
       <button id="loginBtn">GitHub 로그인</button>
       <button id="logoutBtn">로그아웃</button>
@@ -31,7 +52,7 @@ dashboard_html = r"""
     <pre id="me"></pre>
 
     <hr style="margin: 24px 0;" />
-    <h2 style="margin-top: 0;">GitHub API (임베딩 전)</h2>
+    <h2 class="section-title" style="margin-top: 0;">GitHub API · 선택 assets</h2>
 
     <div style="margin-bottom: 12px;">
       <label>repo_id (owner/repo 형식):</label>
@@ -106,6 +127,43 @@ dashboard_html = r"""
       <button id="btnCommits">GET /api/github/repos/{repo_id}/commits</button>
     </div>
     <pre id="commits"></pre>
+
+    <section class="demo-panel" id="embeddingDemo" aria-labelledby="embed-demo-title">
+      <h2 id="embed-demo-title"><span class="tag">NEW</span> GitHub 코드 임베딩 데모</h2>
+      <p class="hint">
+        서버가 <code>asset_hierarchy</code>·GitHub Contents·(옵션) OpenAI로 요약·벡터를 만들고
+        Chroma <code>user_assets_{user_id}</code>에 넣는 흐름을 한 화면에서 시험합니다.
+      </p>
+      <ol class="demo-steps">
+        <li><strong>GitHub 로그인</strong></li>
+        <li>위에서 레포 체크 → <strong>선택 레포 저장</strong></li>
+        <li><strong>저장된 레포(assets 대상)</strong> 클릭 → <strong>Files Tree</strong> 로드 → 파일/폴더 체크 → <strong>선택 assets 저장</strong></li>
+        <li><strong>히스토리 → SQLite</strong>: 아래 첫 버튼으로 <code>selected_repo_assets</code>의 <code>code</code>만 <code>asset_hierarchy</code>에 반영</li>
+        <li><strong>임베딩</strong>: 명시 id(현재 체크 기준) 또는 DB만 사용 · <code>.env</code>에 <code>OPENAI_API_KEY</code> 있으면 실제 LLM·임베딩</li>
+      </ol>
+      <div style="margin-bottom: 12px;">
+        <label for="embedRef"><strong>ref</strong> (브랜치·SHA, 선택):</label>
+        <input id="embedRef" style="width: 240px; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="예: main" />
+        <div style="margin-top: 10px;">
+          <label style="cursor: pointer;">
+            <input type="checkbox" id="embedIncludeSummaries" checked />
+            응답에 <strong>LLM 요약문</strong> 포함 (<code>include_summaries</code>, 응답 크기 증가)
+          </label>
+        </div>
+      </div>
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px;">
+        <button type="button" class="btn-demo-secondary" id="btnSyncHierarchy">히스토리 → asset_hierarchy (code)</button>
+        <button type="button" class="btn-demo-primary" id="btnEmbedExplicit">임베딩 · 선택 코드 id 명시</button>
+        <button type="button" class="btn-demo-primary" id="btnEmbedFromDb">임베딩 · DB(asset_hierarchy)만</button>
+      </div>
+      <p class="hint">
+        API: <code>POST /api/user/asset-hierarchy/sync-from-assets</code> ·
+        <code>POST /api/github/repos/&lt;owner%2Frepo&gt;/embedding</code>
+        · 명시 모드는 체크된 파일로 <code>owner/repo/경로</code> id를 조합합니다.
+      </p>
+      <h4 style="margin: 14px 0 6px 0; color: #334155;">응답</h4>
+      <pre id="embeddingResult"></pre>
+    </section>
 
     <script>
       const setStatus = (text) => { document.getElementById('status').textContent = text; };
@@ -811,7 +869,122 @@ dashboard_html = r"""
             return `- ${cd} | ${cm} | files: ${fc}`;
           })
           .join('\\n');
-        document.getElementById('commits').textContent = `=== Summary ===\n${summaryText}\n\n=== Commits (top ${Math.min(10, commits.length)}) ===\n${top}`;
+        document.getElementById('commits').textContent = `=== Summary ===\\n${summaryText}\\n\\n=== Commits (top ${Math.min(10, commits.length)}) ===\\n${top}`;
+      });
+
+      // ---- GitHub 임베딩 데모 (Chroma + LLM / 스텁) ----
+      function buildExplicitCodeDocumentIds() {
+        const full = (activeSelectedRepoFullName || document.getElementById('repoId')?.value || '').trim();
+        if (!full) {
+          return { ok: false, error: '활성 저장 레포 또는 repo_id(owner/repo)가 없습니다.' };
+        }
+        const ids = Array.from(selectedAssetKeys)
+          .filter((k) => k.startsWith('code:'))
+          .map((k) => `${full}/${k.slice('code:'.length)}`)
+          .sort();
+        if (!ids.length) {
+          return {
+            ok: false,
+            error: '선택된 코드 파일이 없습니다. Files Tree에서 파일 체크 → 「선택 assets 저장」을 먼저 하세요.',
+          };
+        }
+        return { ok: true, ids };
+      }
+
+      function focusEmbeddingPanel(message) {
+        const panel = document.getElementById('embeddingDemo');
+        const pre = document.getElementById('embeddingResult');
+        if (pre && message) pre.textContent = message;
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      async function postEmbeddingRequest(payload) {
+        const repoId = (document.getElementById('repoId')?.value || '').trim();
+        if (!repoId) {
+          focusEmbeddingPanel('오류: repo_id(owner/repo) 입력이 비어 있습니다. 위에서 저장된 레포를 클릭하거나 repo_id를 채우세요.');
+          setStatus('임베딩: repo_id 없음');
+          return;
+        }
+        const url = `/api/github/repos/${encodeURIComponent(repoId)}/embedding`;
+        setStatus('임베딩 요청 중… (파일 수·LLM에 따라 수 분 걸릴 수 있음)');
+        focusEmbeddingPanel(
+          'POST 전송됨. 서버 처리 중입니다…\\n\\n'
+            + '- 상단 Status에도 같은 안내가 뜹니다.\\n'
+            + '- 완료되면 여기에 JSON이 표시됩니다.\\n'
+            + '- 터미널에는 응답 직후 POST .../embedding 한 줄이 찍힙니다.',
+        );
+        const bodyPayload = Object.assign({}, payload);
+        if (document.getElementById('embedIncludeSummaries')?.checked) {
+          bodyPayload.include_summaries = true;
+        }
+        console.info('[embedding] POST', url, bodyPayload);
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(bodyPayload),
+          });
+          const data = await res.json().catch(() => ({ _parse_error: true }));
+          setPre('embeddingResult', { http_status: res.status, response: data });
+          if (res.ok) {
+            const n = (data && data.embedded !== undefined) ? data.embedded : '?';
+            setStatus(`임베딩 완료 · embedded=${n}`);
+          } else {
+            const msg = (data && data.message) ? data.message : 'EMBEDDING_FAILED';
+            setStatus(`임베딩 실패: ${msg}`);
+          }
+        } catch (e) {
+          setStatus('임베딩 요청 예외');
+          setPre('embeddingResult', { error: String(e) });
+        }
+      }
+
+      safeOnClick('btnSyncHierarchy', async () => {
+        if (!activeSelectedRepoId) {
+          setPre('embeddingResult', { error: '저장된 레포를 먼저 선택하세요 (active selected_repo_id).' });
+          setStatus('히스토리 반영: 활성 레포 없음');
+          return;
+        }
+        setStatus('asset_hierarchy(code) 동기화 중…');
+        try {
+          const res = await fetch('/api/user/asset-hierarchy/sync-from-assets', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ selected_repo_id: activeSelectedRepoId }),
+          });
+          const data = await res.json().catch(() => ({}));
+          setPre('embeddingResult', { http_status: res.status, response: data });
+          setStatus(
+            res.ok
+              ? `SQLite 반영 완료 · code ${data.inserted !== undefined ? data.inserted : '?'}건`
+              : 'SQLite 반영 실패',
+          );
+        } catch (e) {
+          setStatus('SQLite 반영 예외');
+          setPre('embeddingResult', { error: String(e) });
+        }
+      });
+
+      safeOnClick('btnEmbedExplicit', async () => {
+        const built = buildExplicitCodeDocumentIds();
+        if (!built.ok) {
+          setPre('embeddingResult', { error: built.error });
+          setStatus(built.error);
+          return;
+        }
+        const refRaw = (document.getElementById('embedRef')?.value || '').trim();
+        const payload = { code_document_ids: built.ids };
+        if (refRaw) payload.ref = refRaw;
+        await postEmbeddingRequest(payload);
+      });
+
+      safeOnClick('btnEmbedFromDb', async () => {
+        const refRaw = (document.getElementById('embedRef')?.value || '').trim();
+        const payload = { code_document_ids: [] };
+        if (refRaw) payload.ref = refRaw;
+        await postEmbeddingRequest(payload);
       });
 
       window.addEventListener('load', () => {

@@ -8,3 +8,7 @@ __pycache__/
 
 .pytest_cache/
 .ruff_cache/
+
+# 로컬 SQLite / Chroma persist (개발·데모용, 커밋 제외)
+data/autofolio.db
+data/chroma/
