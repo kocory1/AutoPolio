@@ -1,11 +1,11 @@
-"""asset_hierarchy folder/project 동기화 (임베딩 result ids)."""
+"""asset_hierarchy folder/project 동기화 (code document ids)."""
 
 from __future__ import annotations
 
 import asyncio
 
 from src.db.sqlite import connect, create_all_tables_async
-from src.service.user.asset_hierarchy_sync import sync_folder_project_rows_from_embedding_result
+from src.service.user.asset_hierarchy_sync import sync_folder_project_rows_from_code_document_ids
 
 
 def _run(coro):
@@ -43,7 +43,7 @@ def test_sync_folder_project_replaces_rows(tmp_path) -> None:
         await conn.execute(
             """
             INSERT INTO asset_hierarchy (id, selected_repo_id, type)
-            VALUES ('o/r/a.py', ?, 'code')
+                VALUES ('o/r/src/a.py', ?, 'code')
             """,
             (sr_id,),
         )
@@ -60,14 +60,11 @@ def test_sync_folder_project_replaces_rows(tmp_path) -> None:
 
     sr_id = _run(setup())
 
-    result_ids = ["o/r/a.py", "o/r/src", "o/r/"]
-
     async def sync() -> None:
-        await sync_folder_project_rows_from_embedding_result(
+        await sync_folder_project_rows_from_code_document_ids(
             user_id="u1",
             repo_full_name="o/r",
-            code_document_ids=["o/r/a.py"],
-            result_ids=result_ids,
+            code_document_ids=["o/r/src/a.py"],
             db_path=db,
         )
 
@@ -91,7 +88,7 @@ def test_sync_folder_project_replaces_rows(tmp_path) -> None:
         return [(str(r["id"]), str(r["type"])) for r in rows]
 
     assert _run(verify()) == [
-        ("o/r/a.py", "code"),
+        ("o/r/src/a.py", "code"),
         ("o/r/src", "folder"),
         ("o/r/", "project"),
     ]
@@ -142,11 +139,10 @@ def test_sync_folder_project_empty_result_deletes_only_folder_project(tmp_path) 
     sr_id = _run(setup())
 
     async def sync() -> None:
-        await sync_folder_project_rows_from_embedding_result(
+        await sync_folder_project_rows_from_code_document_ids(
             user_id="u1",
             repo_full_name="o/r",
             code_document_ids=[],
-            result_ids=[],
             db_path=db,
         )
 

@@ -7,10 +7,10 @@
 | `type` | 채우는 경로 |
 |--------|-------------|
 | **code** | `sync_code_rows_from_selected_assets(selected_repo_id)` — `selected_repo_assets`에 저장된 **파일(code)** 경로를 Chroma 문서 id 형식 `owner/repo/상대경로`로 INSERT |
-| **folder** / **project** | 임베딩 잡 완료 후 `sync_folder_project_rows_from_embedding_result` — 파이프라인이 Chroma에 넣은 `result["ids"]`에서 code가 아닌 id만 골라 DB 반영. `rel == '/'` → **project**, 그 외 상위 폴더 경로 → **folder** |
+| **folder** / **project** | 임베딩 잡 완료 후 `sync_folder_project_rows_from_code_document_ids` — `code_document_ids`(코드 경로)로부터 부모 디렉터리들(**folder**)과 프로젝트 루트(**project**)를 파생해 DB 반영. |
 
 - **code**는 “에셋 저장·동기화” 흐름에서 먼저 채워진다.
-- **folder** / **project**는 임베딩이 끝난 뒤, Chroma에 생성된 id 목록과 동기화된다.
+- **folder** / **project**는 임베딩이 끝난 뒤, `code_document_ids` 경로로부터 재생성되어 동기화된다.
 
 ## 임베딩 파이프라인
 

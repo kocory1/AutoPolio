@@ -17,7 +17,7 @@ from src.service.github_embedding.pipeline import (
     run_github_embedding_pipeline,
 )
 from src.service.user.asset_hierarchy_sync import (
-    sync_folder_project_rows_from_embedding_result,
+    sync_folder_project_rows_from_code_document_ids,
 )
 
 
@@ -135,12 +135,9 @@ async def run_github_repo_embedding_job(
         chroma=chroma,
         include_summaries=include_summaries,
     )
-    ids_raw = result.get("ids")
-    if isinstance(ids_raw, list):
-        await sync_folder_project_rows_from_embedding_result(
-            user_id=user_id,
-            repo_full_name=repo_full_name,
-            code_document_ids=code_document_ids,
-            result_ids=[str(x) for x in ids_raw],
-        )
+    await sync_folder_project_rows_from_code_document_ids(
+        user_id=user_id,
+        repo_full_name=repo_full_name,
+        code_document_ids=code_document_ids,
+    )
     return result

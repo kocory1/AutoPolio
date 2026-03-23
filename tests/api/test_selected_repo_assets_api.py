@@ -243,22 +243,26 @@ def test_asset_hierarchy_sync_inserts_code_rows(
     assert body["inserted"] == 1
     assert body["ids"] == ["owner/repo-a/src/a.py"]
 
-    async def check_db() -> list[str]:
+    async def check_db() -> list[tuple[str, str]]:
         conn = await connect(db_with_selected_repos["db_path"])
         try:
             cur = await conn.execute(
                 """
-                SELECT id FROM asset_hierarchy
-                WHERE selected_repo_id = ? AND type = 'code'
-                ORDER BY id
+                SELECT id, type FROM asset_hierarchy
+                WHERE selected_repo_id = ?
+                ORDER BY type ASC, id ASC
                 """,
                 (sid,),
             )
             rows = await cur.fetchall()
             await cur.close()
-            return [r["id"] for r in rows]
+            return [(r["id"], r["type"]) for r in rows]
         finally:
             await conn.close()
 
-    assert _run(check_db()) == ["owner/repo-a/src/a.py"]
+    assert _run(check_db()) == [
+        ("owner/repo-a/src/a.py", "code"),
+        ("owner/repo-a/src", "folder"),
+        ("owner/repo-a/", "project"),
+    ]
 
