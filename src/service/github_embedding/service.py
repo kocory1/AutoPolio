@@ -16,6 +16,9 @@ from src.service.github_embedding.pipeline import (
     TextEmbedderPort,
     run_github_embedding_pipeline,
 )
+from src.service.user.asset_hierarchy_sync import (
+    sync_folder_project_rows_from_code_document_ids,
+)
 
 
 class _TokenGitHubContentAdapter:
@@ -121,7 +124,7 @@ async def run_github_repo_embedding_job(
     chroma = GitHubEmbeddingChromaAdapter(
         persist_dir=persist if persist is not None else None,
     )
-    return await run_github_embedding_pipeline(
+    result = await run_github_embedding_pipeline(
         user_id=user_id,
         repo_full_name=repo_full_name,
         code_document_ids=code_document_ids,
@@ -132,3 +135,9 @@ async def run_github_repo_embedding_job(
         chroma=chroma,
         include_summaries=include_summaries,
     )
+    await sync_folder_project_rows_from_code_document_ids(
+        user_id=user_id,
+        repo_full_name=repo_full_name,
+        code_document_ids=code_document_ids,
+    )
+    return result
