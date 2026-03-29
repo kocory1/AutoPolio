@@ -39,7 +39,7 @@ dashboard_html = r"""
   </head>
   <body>
     <h2>Autofolio Dev Dashboard</h2>
-    <p class="hint">OAuth · GitHub API · 선택 레포/assets · <strong>코드 임베딩(Chroma)</strong> 개발용 화면입니다.</p>
+    <p class="hint">OAuth · GitHub API · 선택 레포/assets · <strong>코드 임베딩(Chroma)</strong> · <strong>채용공고 parse → job_id</strong> · <strong>자소서 Draft</strong> 개발용 화면입니다.</p>
     <div style="margin-bottom: 12px;">
       <button id="loginBtn">GitHub 로그인</button>
       <button id="logoutBtn">로그아웃</button>
@@ -163,6 +163,69 @@ dashboard_html = r"""
       </p>
       <h4 style="margin: 14px 0 6px 0; color: #334155;">응답</h4>
       <pre id="embeddingResult"></pre>
+    </section>
+
+    <section class="demo-panel" id="jobParseDemo" aria-labelledby="job-parse-title" style="border-color: #fcd34d; background: linear-gradient(165deg, #fffbeb 0%, #f8fafc 55%);">
+      <h2 id="job-parse-title"><span class="tag" style="background:#d97706;">Jobs</span> 채용공고 저장 (parse)</h2>
+      <p class="hint">
+        <code>POST /api/jobs/parse</code>로 SQLite <code>jobs</code> 테이블에 공고를 넣고 <strong>job_id</strong>를 받습니다.
+        성공 시 아래 자소서 Draft의 <strong>job_id</strong> 입력칸에 자동으로 채웁니다. 이후 <code>POST /api/cover-letter/draft</code>에 같은 id를 넘기면 공고 맥락이 붙습니다.
+      </p>
+      <div style="margin-bottom: 10px;">
+        <label><input type="radio" name="jobSource" value="manual" checked /> manual (직접 입력)</label>
+        &nbsp;&nbsp;
+        <label><input type="radio" name="jobSource" value="url" /> url (페이지 가져오기 · OPENAI 있으면 구조화)</label>
+      </div>
+      <div id="jobManualFields">
+        <div style="margin-bottom: 6px;"><label>company_name *</label><br />
+          <input id="jobCompanyName" style="width: min(100%, 420px); padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="기업명" />
+        </div>
+        <div style="margin-bottom: 6px;"><label>position_title *</label><br />
+          <input id="jobPositionTitle" style="width: min(100%, 420px); padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="포지션명" />
+        </div>
+        <div style="margin-bottom: 6px;"><label>company_persona (선택)</label><br />
+          <input id="jobCompanyPersona" style="width: min(100%, 420px); padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="기업 인재상" />
+        </div>
+        <div style="margin-bottom: 6px;"><label>duties (한 줄에 한 항목)</label><br />
+          <textarea id="jobDuties" rows="3" style="width: min(100%, 560px); padding: 8px;" placeholder="담당 업무"></textarea>
+        </div>
+        <div style="margin-bottom: 6px;"><label>requirements</label><br />
+          <textarea id="jobRequirements" rows="2" style="width: min(100%, 560px); padding: 8px;" placeholder="자격 요건 (줄 단위)"></textarea>
+        </div>
+        <div style="margin-bottom: 10px;"><label>preferences</label><br />
+          <textarea id="jobPreferences" rows="2" style="width: min(100%, 560px); padding: 8px;" placeholder="우대 사항 (줄 단위)"></textarea>
+        </div>
+      </div>
+      <div id="jobUrlField" style="display: none; margin-bottom: 10px;">
+        <label>채용공고 URL *</label><br />
+        <input id="jobUrl" style="width: min(100%, 520px); padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="https://..." />
+      </div>
+      <button type="button" class="btn-demo-primary" id="btnJobParse" style="background:#d97706 !important; border-color:#b45309 !important;">POST /api/jobs/parse</button>
+      <h4 style="margin: 14px 0 6px 0; color: #334155;">응답</h4>
+      <pre id="jobParseResult"></pre>
+    </section>
+
+    <section class="demo-panel" id="coverLetterDemo" aria-labelledby="cl-demo-title" style="border-color: #6ee7b7; background: linear-gradient(165deg, #ecfdf5 0%, #f8fafc 55%);">
+      <h2 id="cl-demo-title"><span class="tag" style="background:#059669;">Writer</span> 자소서 Draft</h2>
+      <p class="hint">
+        <strong>GitHub 로그인</strong> 필수. 위에서 <strong>공고 저장</strong>으로 받은 <code>job_id</code>가 있으면 맥락이 붙습니다(비우면 범용 생성).
+        코드 RAG를 쓰려면 위 임베딩 단계를 먼저 완료하는 것이 좋습니다.
+      </p>
+      <div style="margin-bottom: 8px;">
+        <label for="draftJobId">job_id (선택, <code>jobs</code> 테이블 id):</label><br />
+        <input id="draftJobId" style="width: min(100%, 420px); padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="비우면 공고 맥락 없이 생성" />
+      </div>
+      <div style="margin-bottom: 8px;">
+        <label for="draftQuestionText">question_text:</label><br />
+        <textarea id="draftQuestionText" rows="3" style="width: min(100%, 560px); padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;">지원 동기를 작성해주세요.</textarea>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <label for="draftMaxChars">max_chars:</label>
+        <input id="draftMaxChars" type="number" style="width: 100px; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;" value="800" min="1" />
+      </div>
+      <button type="button" class="btn-demo-primary" id="btnCoverLetterDraft" style="background:#059669 !important; border-color:#047857 !important;">POST /api/cover-letter/draft</button>
+      <h4 style="margin: 14px 0 6px 0; color: #334155;">응답</h4>
+      <pre id="coverLetterResult"></pre>
     </section>
 
     <script>
@@ -985,6 +1048,117 @@ dashboard_html = r"""
         const payload = { code_document_ids: [] };
         if (refRaw) payload.ref = refRaw;
         await postEmbeddingRequest(payload);
+      });
+
+      document.querySelectorAll('input[name="jobSource"]').forEach((el) => {
+        el.addEventListener('change', () => {
+          const manual = document.querySelector('input[name="jobSource"]:checked').value === 'manual';
+          const mf = document.getElementById('jobManualFields');
+          const uf = document.getElementById('jobUrlField');
+          if (mf) mf.style.display = manual ? 'block' : 'none';
+          if (uf) uf.style.display = manual ? 'none' : 'block';
+        });
+      });
+
+      safeOnClick('btnJobParse', async () => {
+        const manual = document.querySelector('input[name="jobSource"]:checked').value === 'manual';
+        let payload;
+        if (manual) {
+          const company = (document.getElementById('jobCompanyName')?.value || '').trim();
+          const pos = (document.getElementById('jobPositionTitle')?.value || '').trim();
+          if (!company || !pos) {
+            setPre('jobParseResult', { error: 'company_name과 position_title은 필수입니다.' });
+            setStatus('공고 parse: 필수 필드 누락');
+            return;
+          }
+          const splitLines = (id) =>
+            (document.getElementById(id)?.value || '')
+              .split('\\n')
+              .map((s) => s.trim())
+              .filter(Boolean);
+          payload = {
+            source_type: 'manual',
+            company_name: company,
+            position_title: pos,
+            company_persona: (document.getElementById('jobCompanyPersona')?.value || '').trim(),
+            duties: splitLines('jobDuties'),
+            requirements: splitLines('jobRequirements'),
+            preferences: splitLines('jobPreferences'),
+          };
+        } else {
+          const u = (document.getElementById('jobUrl')?.value || '').trim();
+          if (!u) {
+            setPre('jobParseResult', { error: 'url을 입력하세요.' });
+            setStatus('공고 parse: url 없음');
+            return;
+          }
+          payload = { source_type: 'url', url: u };
+        }
+        setStatus('공고 parse 요청 중…');
+        const jp = document.getElementById('jobParseDemo');
+        if (jp) jp.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        try {
+          const res = await fetch('/api/jobs/parse', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => ({}));
+          setPre('jobParseResult', { http_status: res.status, response: data });
+          if (res.ok && data.job_id) {
+            const d = document.getElementById('draftJobId');
+            if (d) d.value = data.job_id;
+            setStatus(`공고 저장 완료 · job_id=${data.job_id}`);
+          } else {
+            const msg = (data && data.message) ? data.message : (data && data.error) ? data.error : String(res.status);
+            setStatus(`공고 parse 실패: ${msg}`);
+          }
+        } catch (e) {
+          setStatus('공고 parse 예외');
+          setPre('jobParseResult', { error: String(e) });
+        }
+      });
+
+      safeOnClick('btnCoverLetterDraft', async () => {
+        const jobId = (document.getElementById('draftJobId')?.value || '').trim();
+        const questionText = (document.getElementById('draftQuestionText')?.value || '').trim();
+        const maxRaw = document.getElementById('draftMaxChars')?.value;
+        const maxChars = Math.max(1, parseInt(maxRaw || '800', 10) || 800);
+        if (!questionText) {
+          setPre('coverLetterResult', { error: 'question_text를 입력하세요.' });
+          setStatus('draft: question 비어 있음');
+          return;
+        }
+        const payload = {
+          questions: [{ question_text: questionText, max_chars: maxChars }],
+        };
+        if (jobId) {
+          payload.job_id = jobId;
+        }
+        setStatus('자소서 draft 요청 중…');
+        const panel = document.getElementById('coverLetterDemo');
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        try {
+          const res = await fetch('/api/cover-letter/draft', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => ({ _parse_error: true }));
+          setPre('coverLetterResult', { http_status: res.status, response: data });
+          if (res.ok) {
+            const n = (data && data.drafts) ? data.drafts.length : 0;
+            setStatus(`자소서 draft 완료 · drafts=${n}`);
+          } else {
+            const msg = (data && data.message) ? data.message : (data && data.error) ? data.error : String(res.status);
+            setStatus(`자소서 draft 실패: ${msg}`);
+          }
+        } catch (e) {
+          setStatus('자소서 draft 예외');
+          setPre('coverLetterResult', { error: String(e) });
+        }
       });
 
       window.addEventListener('load', () => {

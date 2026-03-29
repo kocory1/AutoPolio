@@ -81,8 +81,10 @@ def _normalize_metadata(
     asset_type: str,
     path_value: str,
 ) -> dict[str, str]:
+    # retrieve_user_assets(source_filter=["github"]) 및 메타 스키마와 맞춘다.
     return {
         "user_id": user_id,
+        "source": "github",
         "repo": repo_full_name,
         "ref": ref or "",
         "type": asset_type,

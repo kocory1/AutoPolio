@@ -1,65 +1,234 @@
-"""2번 그래프(Writer) 노드. 내부 로직은 TODO 주석으로만 표시."""
+"""2번 그래프(Writer) 노드."""
 
+from __future__ import annotations
+
+import json
+import os
+import re
+from typing import Any
+
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+
+from src.service.rag import retrieve_passed_cover_letters, retrieve_user_assets
+
+from .prompts import DRAFT_CONSISTENCY_SYSTEM_PROMPT, DRAFT_SYSTEM_PROMPT
 from .state import WriterState
 
-
-def retrieve_samples(state: WriterState) -> dict:
-    """진입 시 검증 + 합격 자소서 검색 모듈 호출.
-
-    입력: question, max_chars, job_parsed (assets 불필요 — load_assets에서 이후 조회)
-    출력: (통과) samples / (검증 실패만) error → END
-    """
-    # TODO: question, max_chars 필수 검증. 없으면 error 설정 후 반환
-    # TODO: 검증 통과 시 retrieve_passed_cover_letters(question, company_name, ...) 호출
-    # TODO: samples 못 찾아도(빈 리스트/검색 모듈 에러) error 설정 안 함 → load_assets로 진행
-    return {"samples": state.get("samples") or []}
+DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
 
 
-def load_assets(state: WriterState) -> dict:
-    """유저 DB에서 에셋 조회. retrieve_samples → (통과) load_assets → generate_draft.
-
-    입력: user_id
-    출력: (통과) assets / (실패) error → END
-    """
-    # TODO: user_id로 P1 API 또는 DB에서 에셋 조회. 문항/공고 기반 관련 에셋 선별
-    # TODO: 조회 실패 시 error 설정 후 반환
-    return {"assets": state.get("assets") or []}
-
-
-def generate_draft(state: WriterState) -> dict:
-    """LLM 초안 생성. 재진입 시 consistency_feedback 프롬프트 반영.
-
-    입력: assets, samples, question, job_parsed, (재진입) consistency_feedback
-    출력: draft
-    """
-    # TODO: assets + samples + question + job_parsed로 LLM 프롬프트 구성
-    # TODO: 재진입 시 state.get("consistency_feedback")를 프롬프트에 포함
-    # TODO: draft = llm.invoke(...)
-    return {"draft": state.get("draft") or "(초안 placeholder)"}
+def _build_chat_openai(temperature: float) -> ChatOpenAI:
+    """ChatOpenAI JSON mode (portfolio_graph/node.py와 동일 패턴)."""
+    return ChatOpenAI(
+        model=DEFAULT_MODEL,
+        temperature=temperature,
+        api_key=os.getenv("OPENAI_API_KEY"),
+        model_kwargs={"response_format": {"type": "json_object"}},
+    )
 
 
-def self_consistency(state: WriterState) -> dict:
-    """환각 체크. 실패 시 consistency_feedback 기록, draft_retry_count 증가.
+def _question_missing(state: WriterState) -> bool:
+    q = state.get("question")
+    if q is None:
+        return True
+    if isinstance(q, str) and not q.strip():
+        return True
+    return False
 
-    입력: draft, assets, draft_retry_count
-    출력: is_hallucination, (실패 시) consistency_feedback, draft_retry_count+1
-    """
-    # TODO: draft가 assets에 근거한지 검사. 없는 경험·지어낸 수치 → 실패
-    # TODO: 실패 시 consistency_feedback에 문장/구간·근거 없는 내용 기록
-    # TODO: draft_retry_count += 1
-    return {
-        "is_hallucination": True,
-        "consistency_feedback": state.get("consistency_feedback") or {},
-        "draft_retry_count": state.get("draft_retry_count") or 0,
+
+def _max_chars_missing(state: WriterState) -> bool:
+    return state.get("max_chars") is None
+
+
+def _job_parsed_meta(job_parsed: dict | None) -> tuple[str | None, str | None, str | None]:
+    if not isinstance(job_parsed, dict):
+        return None, None, None
+    company = job_parsed.get("company_name")
+    position = job_parsed.get("position")
+    year = job_parsed.get("year")
+    if year is not None and not isinstance(year, str):
+        year = str(year)
+    if isinstance(company, str) and not company.strip():
+        company = None
+    if isinstance(position, str) and not position.strip():
+        position = None
+    if isinstance(year, str) and not year.strip():
+        year = None
+    return (
+        str(company) if company is not None else None,
+        str(position) if position is not None else None,
+        year,
+    )
+
+
+def _summarize_assets(assets: list[Any]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in assets or []:
+        if not isinstance(item, dict):
+            continue
+        out.append(
+            {
+                "id": item.get("id"),
+                "summary": item.get("document"),
+                "metadata": item.get("metadata"),
+            }
+        )
+    return out
+
+
+async def retrieve_samples(state: WriterState) -> dict:
+    """진입 시 검증 + 합격 자소서 검색 모듈 호출."""
+    if _question_missing(state):
+        return {"error": "question is required"}
+    if _max_chars_missing(state):
+        return {"error": "max_chars is required"}
+
+    job = state.get("job_parsed") if isinstance(state.get("job_parsed"), dict) else {}
+    company_name, position, year = _job_parsed_meta(job)
+    question = str(state.get("question", "")).strip()
+
+    try:
+        samples = await retrieve_passed_cover_letters(
+            question=question,
+            company_name=company_name,
+            position=position,
+            year=year,
+            top_k=5,
+        )
+    except Exception:
+        samples = []
+
+    return {"samples": samples}
+
+
+async def load_assets(state: WriterState) -> dict:
+    """유저 DB에서 에셋 조회."""
+    user_id = state.get("user_id")
+    if not user_id:
+        return {"error": "user_id is required"}
+
+    try:
+        # user_assets_{user_id} 는 현재 GitHub 임베딩만 적재. 과거 문서는 source 메타가 없을 수 있어
+        # source_filter 를 쓰면 0건이 되어 no_github_assets 가 나므로 필터 없이 조회한다.
+        assets = await retrieve_user_assets(
+            user_id=str(user_id),
+            source_filter=None,
+            type_filter=None,
+            top_k=20,
+        )
+    except Exception as exc:
+        return {"error": f"retrieve_user_assets_failed: {type(exc).__name__}", "assets": []}
+
+    if not assets:
+        return {"error": "no_github_assets", "assets": []}
+
+    return {"assets": assets}
+
+
+async def generate_draft(state: WriterState) -> dict:
+    """LLM 초안 생성."""
+    llm = _build_chat_openai(temperature=0.2)
+
+    assets = _summarize_assets(state.get("assets") or [])
+    user_payload: dict[str, Any] = {
+        "question": state.get("question"),
+        "max_chars": state.get("max_chars"),
+        "job_parsed": state.get("job_parsed") or {},
+        "assets": assets,
+        "samples": state.get("samples") or [],
     }
+    human_text = json.dumps(user_payload, ensure_ascii=False)
+    feedback = state.get("consistency_feedback")
+    if feedback:
+        human_text += (
+            "\n\n다음 지적사항을 반영해 수정해줘: "
+            + (
+                json.dumps(feedback, ensure_ascii=False)
+                if isinstance(feedback, (dict, list))
+                else str(feedback)
+            )
+        )
+
+    try:
+        response = await llm.ainvoke(
+            [
+                SystemMessage(content=DRAFT_SYSTEM_PROMPT),
+                HumanMessage(content=human_text),
+            ]
+        )
+        content = response.content if isinstance(response.content, str) else "{}"
+        parsed = json.loads(content)
+        if isinstance(parsed, dict):
+            draft = parsed.get("draft")
+            if isinstance(draft, str):
+                return {"draft": draft}
+    except Exception:
+        pass
+
+    return {"draft": ""}
+
+
+async def self_consistency(state: WriterState) -> dict:
+    """환각 체크."""
+    llm = _build_chat_openai(temperature=0.0)
+    draft = state.get("draft") or ""
+    assets = _summarize_assets(state.get("assets") or [])
+    retry = state.get("draft_retry_count") or 0
+
+    user_payload = {
+        "draft": draft,
+        "assets": assets,
+    }
+    try:
+        response = await llm.ainvoke(
+            [
+                SystemMessage(content=DRAFT_CONSISTENCY_SYSTEM_PROMPT),
+                HumanMessage(content=json.dumps(user_payload, ensure_ascii=False)),
+            ]
+        )
+        content = response.content if isinstance(response.content, str) else "{}"
+        parsed = json.loads(content)
+        if not isinstance(parsed, dict):
+            return {
+                "is_hallucination": False,
+                "consistency_feedback": {},
+                "draft_retry_count": retry,
+            }
+
+        is_hallucination = bool(parsed.get("is_hallucination", False))
+        raw_fb = parsed.get("consistency_feedback")
+        if not isinstance(raw_fb, dict):
+            raw_fb = {}
+
+        if not is_hallucination:
+            return {
+                "is_hallucination": False,
+                "consistency_feedback": {},
+                "draft_retry_count": retry,
+            }
+
+        return {
+            "is_hallucination": True,
+            "consistency_feedback": raw_fb,
+            "draft_retry_count": retry + 1,
+        }
+    except Exception:
+        return {
+            "is_hallucination": False,
+            "consistency_feedback": {},
+            "draft_retry_count": retry,
+        }
 
 
 def format_output(state: WriterState) -> dict:
-    """글자수·형식 정리. max_chars 필수.
-
-    입력: draft, max_chars
-    출력: draft (최종)
-    """
-    # TODO: max_chars로 글자수 제한
-    # TODO: 줄바꿈·불필요 공백 정리
-    return {"draft": state.get("draft") or ""}
+    """글자수·형식 정리."""
+    draft = state.get("draft") or ""
+    if state.get("max_chars") is not None:
+        mc = int(state["max_chars"])
+        draft = draft[:mc]
+        draft = re.sub(r"\n\n+", "\n", draft)
+        draft = draft.strip()
+    else:
+        draft = draft.strip()
+    return {"draft": draft}

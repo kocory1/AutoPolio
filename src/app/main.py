@@ -13,6 +13,8 @@ from fastapi.responses import HTMLResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from src.api import portfolio_router
+from src.api.cover_letter import router as cover_letter_router
+from src.api.jobs import router as jobs_router
 from src.api.auth import router as auth_router
 from src.api.github import router as github_router
 from src.api.user_assets import router as user_assets_router
@@ -44,6 +46,8 @@ def create_app() -> FastAPI:
 
     app.include_router(auth_router)
     app.include_router(portfolio_router)
+    app.include_router(jobs_router)
+    app.include_router(cover_letter_router)
     app.include_router(github_router)
     app.include_router(user_assets_router)
 
