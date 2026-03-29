@@ -14,7 +14,7 @@ from src.service.github_embedding.prompts import (
     DEVELOPER_PROJECT_SUMMARY_SYSTEM,
 )
 
-DEFAULT_CHAT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+DEFAULT_CHAT_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 # 단일 요청 토큰 상한 완화용(비용·지연과 트레이드오프)
 MAX_SOURCE_CHARS = int(os.getenv("GITHUB_EMBED_MAX_SOURCE_CHARS", "120000"))
 
@@ -63,7 +63,9 @@ class OpenAIDeveloperSummarizer:
         body, truncated = _truncate_source(source_code)
         note = ""
         if truncated:
-            note = f"\n\n(원문 {len(source_code)}자 중 앞 {MAX_SOURCE_CHARS}자만 전달됨.)"
+            note = (
+                f"\n\n(원문 {len(source_code)}자 중 앞 {MAX_SOURCE_CHARS}자만 전달됨.)"
+            )
         user = (
             f"레포지토리: `{repo_full_name}`\n"
             f"파일 경로: `{path}`\n{note}\n\n"
@@ -95,8 +97,5 @@ class OpenAIDeveloperSummarizer:
         blocks = "\n\n---\n\n".join(
             f"[{i + 1}]\n{s}" for i, s in enumerate(root_child_summaries)
         )
-        user = (
-            f"레포지토리: `{repo_full_name}`\n\n"
-            f"루트 직계 요약들:\n\n{blocks}"
-        )
+        user = f"레포지토리: `{repo_full_name}`\n\n루트 직계 요약들:\n\n{blocks}"
         return await self._complete(DEVELOPER_PROJECT_SUMMARY_SYSTEM, user)
