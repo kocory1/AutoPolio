@@ -57,13 +57,16 @@ PORTFOLIO_STAR_QUERIES: list[str] = [
 def _build_where_clause(
     source_filter: list[str] | None,
     type_filter: list[str] | None,
+    repo_filter: list[str] | None = None,
 ) -> dict[str, Any] | None:
-    """Chroma where 절을 생성한다."""
+    """Chroma where 절을 생성한다. repo_filter가 비어 있지 않으면 repo 메타로 제한."""
     conditions: list[dict[str, Any]] = []
     if source_filter:
         conditions.append({"source": {"$in": source_filter}})
     if type_filter:
         conditions.append({"type": {"$in": type_filter}})
+    if repo_filter is not None and len(repo_filter) > 0:
+        conditions.append({"repo": {"$in": repo_filter}})
 
     if not conditions:
         return None
@@ -156,21 +159,24 @@ async def retrieve_user_assets(
     user_id: str,
     source_filter: list[str] | None = None,
     type_filter: list[str] | None = None,
+    repo_filter: list[str] | None = None,
     top_k: int = 20,
 ) -> list[dict]:
     """유저 에셋을 조회해 반환한다.
 
     - STAR 관점별 다중 쿼리로 GitHub 임베딩 문서와의 의미 거리를 좁혀 recall 향상
     - 각 쿼리마다 top_k 개씩 검색 후 id 기준 중복 제거, distance 오름차순으로 최종 top_k 반환
-    - source/type 필터는 where 절로 적용
+    - source/type/repo 필터는 where 절로 적용 (repo_filter가 빈 리스트면 결과 없음)
     - 반환: [{id, document, metadata, distance}, ...]
     """
     if not user_id:
         raise ValueError("user_id is required")
     if top_k <= 0:
         raise ValueError("top_k must be greater than 0")
+    if repo_filter is not None and len(repo_filter) == 0:
+        return []
 
-    where = _build_where_clause(source_filter, type_filter)
+    where = _build_where_clause(source_filter, type_filter, repo_filter)
 
     # GitHub 임베딩은 OpenAI API로 벡터를 넣는다. query_texts 는 컬렉션 기본 임베더(MiniLM 등)를
     # 쓰므로 차원·공간이 달라 검색이 비거나 실패할 수 있다. OPENAI_API_KEY 가 있으면 동일 모델로

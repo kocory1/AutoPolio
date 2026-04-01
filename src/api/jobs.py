@@ -292,3 +292,41 @@ async def parse_job(request: Request, body: JobsParseBody) -> JSONResponse | dic
         requirements=list(structured.get("requirements") or []),
         preferences=list(structured.get("preferences") or []),
     )
+
+
+@router.get("/recent", response_model=None)
+async def list_recent_jobs(request: Request, limit: int = 30) -> JSONResponse | dict[str, Any]:
+    """최근 저장된 채용공고 목록 (대시보드 job_id 선택용). 로그인 필요."""
+    uid = request.session.get("user_id")
+    if not uid:
+        return _error_response(401, "UNAUTHORIZED", "UNAUTHORIZED")
+
+    lim = max(1, min(int(limit), 100))
+    conn = await connect()
+    try:
+        cur = await conn.execute(
+            """
+            SELECT id, company_name, position, url, created_at
+            FROM jobs
+            ORDER BY datetime(created_at) DESC
+            LIMIT ?
+            """,
+            (lim,),
+        )
+        rows = await cur.fetchall()
+        await cur.close()
+    finally:
+        await conn.close()
+
+    jobs: list[dict[str, Any]] = []
+    for row in rows:
+        jobs.append(
+            {
+                "id": row["id"],
+                "company_name": row["company_name"],
+                "position": row["position"],
+                "url": row["url"],
+                "created_at": row["created_at"],
+            }
+        )
+    return {"jobs": jobs}

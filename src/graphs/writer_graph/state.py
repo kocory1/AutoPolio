@@ -18,9 +18,11 @@ class WriterState(TypedDict, total=False):
     - consistency_feedback: 검증 실패 시 재생성용 피드백 (프롬프트에 반영)
     - messages: (선택) 대화 이력 — 스트리밍/디버깅용
     - error: 에러 메시지 — retrieve_samples·load_assets 검증/조회 실패 시
+    - primary_repo: 이 문항에서 우선 사용할 레포 full_name (선택 레포 중 하나)
     """
 
     user_id: str
+    primary_repo: str
     assets: list
     question: str
     max_chars: int

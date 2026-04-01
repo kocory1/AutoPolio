@@ -11,6 +11,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
 from src.service.rag import retrieve_passed_cover_letters, retrieve_user_assets
+from src.service.user.repos import get_selected_repos
 
 from .prompts import DRAFT_CONSISTENCY_SYSTEM_PROMPT, DRAFT_SYSTEM_PROMPT
 from .state import WriterState
@@ -77,6 +78,34 @@ def _summarize_assets(assets: list[Any]) -> list[dict[str, Any]]:
     return out
 
 
+def _draft_evidence_payload(assets: list[Any]) -> dict[str, Any]:
+    """초안용: 레포별로 type·path·summary를 묶어 LLM에 증거로만 쓰이게 전달."""
+    by_repo: dict[str, list[dict[str, Any]]] = {}
+    for item in assets or []:
+        if not isinstance(item, dict):
+            continue
+        meta = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+        repo = str(meta.get("repo") or "").strip() or "(unknown_repo)"
+        summary = item.get("document") or ""
+        atype = str(meta.get("type") or "")
+        path = str(meta.get("path") or "")
+        by_repo.setdefault(repo, []).append(
+            {
+                "type": atype,
+                "path": path,
+                "summary": summary,
+            }
+        )
+    return {
+        "assets_by_repository": by_repo,
+        "instruction": (
+            "이 블록은 GitHub 임베딩에서 온 '내가 실제로 한 일'에 대한 증거(evidence)이다. "
+            "레포·type·path·summary에 명시된 내용만을 사실로 다루고, "
+            "여기에 없는 프로젝트명·기술 스택·문제해결 경험·수치는 절대 만들지 말 것."
+        ),
+    }
+
+
 async def retrieve_samples(state: WriterState) -> dict:
     """진입 시 검증 + 합격 자소서 검색 모듈 호출."""
     if _question_missing(state):
@@ -103,20 +132,85 @@ async def retrieve_samples(state: WriterState) -> dict:
 
 
 async def load_assets(state: WriterState) -> dict:
-    """유저 DB에서 에셋 조회."""
+    """유저 DB에서 에셋 조회 (선택된 GitHub 레포만)."""
     user_id = state.get("user_id")
     if not user_id:
         return {"error": "user_id is required"}
 
     try:
+        selected = await get_selected_repos(str(user_id))
+    except Exception as exc:
+        return {"error": f"get_selected_repos_failed: {type(exc).__name__}", "assets": []}
+
+    if not selected:
+        return {"error": "no_selected_repos", "assets": []}
+
+    primary_repo = str(state.get("primary_repo") or "").strip()
+    if primary_repo and primary_repo not in selected:
+        primary_repo = ""
+
+    try:
         # user_assets_{user_id} 는 현재 GitHub 임베딩만 적재. 과거 문서는 source 메타가 없을 수 있어
         # source_filter 를 쓰면 0건이 되어 no_github_assets 가 나므로 필터 없이 조회한다.
-        assets = await retrieve_user_assets(
-            user_id=str(user_id),
-            source_filter=None,
-            type_filter=None,
-            top_k=20,
-        )
+        if primary_repo:
+            primary_assets = await retrieve_user_assets(
+                user_id=str(user_id),
+                source_filter=None,
+                type_filter=None,
+                repo_filter=[primary_repo],
+                top_k=15,
+            )
+            if not primary_assets:
+                assets = await retrieve_user_assets(
+                    user_id=str(user_id),
+                    source_filter=None,
+                    type_filter=None,
+                    repo_filter=selected,
+                    top_k=20,
+                )
+            else:
+                merged: list[dict[str, Any]] = []
+                seen_ids: set[Any] = set()
+                for a in primary_assets:
+                    if not isinstance(a, dict):
+                        continue
+                    iid = a.get("id")
+                    if iid in seen_ids:
+                        continue
+                    seen_ids.add(iid)
+                    merged.append(a)
+                    if len(merged) >= 20:
+                        break
+                others = [r for r in selected if r != primary_repo]
+                for other in others:
+                    if len(merged) >= 20:
+                        break
+                    batch = await retrieve_user_assets(
+                        user_id=str(user_id),
+                        source_filter=None,
+                        type_filter=None,
+                        repo_filter=[other],
+                        top_k=5,
+                    )
+                    for a in batch:
+                        if not isinstance(a, dict):
+                            continue
+                        iid = a.get("id")
+                        if iid in seen_ids:
+                            continue
+                        seen_ids.add(iid)
+                        merged.append(a)
+                        if len(merged) >= 20:
+                            break
+                assets = merged[:20]
+        else:
+            assets = await retrieve_user_assets(
+                user_id=str(user_id),
+                source_filter=None,
+                type_filter=None,
+                repo_filter=selected,
+                top_k=20,
+            )
     except Exception as exc:
         return {"error": f"retrieve_user_assets_failed: {type(exc).__name__}", "assets": []}
 
@@ -130,15 +224,20 @@ async def generate_draft(state: WriterState) -> dict:
     """LLM 초안 생성."""
     llm = _build_chat_openai(temperature=0.2)
 
-    assets = _summarize_assets(state.get("assets") or [])
+    evidence = _draft_evidence_payload(state.get("assets") or [])
     user_payload: dict[str, Any] = {
         "question": state.get("question"),
         "max_chars": state.get("max_chars"),
         "job_parsed": state.get("job_parsed") or {},
-        "assets": assets,
-        "samples": state.get("samples") or [],
+        "evidence_for_draft": evidence,
+        "samples_style_reference_only": state.get("samples") or [],
     }
     human_text = json.dumps(user_payload, ensure_ascii=False)
+    human_text += (
+        "\n\n[필수] 위 JSON의 evidence_for_draft.assets_by_repository에 나온 "
+        "프로젝트명·기술·문제·해결 과정만을 근거로 본문을 작성하세요. "
+        "이 내용만을 근거로 작성하세요. 문항 유형에 맞게 해당 증거에서 연결하세요."
+    )
     feedback = state.get("consistency_feedback")
     if feedback:
         human_text += (

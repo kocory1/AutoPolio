@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 from typing import List
 
@@ -8,6 +9,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from src.db.sqlite.client import connect
+from src.db.vector.chroma import get_user_asset_collection
 from src.service.git_hub import repos as github_repos
 from src.service.git_hub.repos import GitHubTreeTruncatedError
 from src.service.github_embedding.hierarchy import fetch_code_document_ids_for_repo
@@ -160,6 +162,43 @@ async def selected_repos_put(request: Request) -> JSONResponse:
         return _error_response(500, "INTERNAL_SERVER_ERROR", "SELECTED_REPOS_UPSERT_FAILED")
 
     return JSONResponse({"selected_repos": items})
+
+
+@router.get("/user/embedding-status")
+async def embedding_status_get(request: Request) -> JSONResponse:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return _error_response(401, "UNAUTHORIZED", "UNAUTHORIZED")
+
+    try:
+        selected_items = await get_selected_repos_detailed(user_id)
+    except Exception:
+        return _error_response(
+            500, "INTERNAL_SERVER_ERROR", "SELECTED_REPOS_FETCH_FAILED"
+        )
+
+    col = get_user_asset_collection(str(user_id))
+    status: dict[str, bool] = {}
+
+    # repo 메타데이터가 존재(=Chroma에 ids가 존재)하면 embedded=true
+    for it in selected_items:
+        full_name = (it or {}).get("full_name")
+        if not full_name:
+            continue
+
+        try:
+            res = await asyncio.to_thread(
+                col.get,
+                where={"repo": {"$eq": str(full_name)}},
+                limit=1,
+            )
+            ids = list(res.get("ids") or [])
+            status[str(full_name)] = bool(ids)
+        except Exception:
+            # 일부 repo에서 Chroma 조회가 실패해도 전체 응답은 유지한다.
+            status[str(full_name)] = False
+
+    return JSONResponse({"status": status})
 
 
 @router.get("/github/repos/{repo_id:path}/files")

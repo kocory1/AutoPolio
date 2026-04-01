@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import inspect
 import json
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -130,6 +131,12 @@ async def test_retrieve_samples_empty_result_no_error(monkeypatch):
 async def test_load_assets_missing_user_id(monkeypatch):
     monkeypatch.setattr(
         writer_node,
+        "get_selected_repos",
+        AsyncMock(side_effect=AssertionError("should not call get_selected_repos")),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        writer_node,
         "retrieve_user_assets",
         AsyncMock(side_effect=AssertionError("should not call retrieve_user_assets")),
         raising=False,
@@ -143,7 +150,35 @@ async def test_load_assets_missing_user_id(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_load_assets_no_selected_repos(monkeypatch):
+    monkeypatch.setattr(
+        writer_node,
+        "get_selected_repos",
+        AsyncMock(return_value=[]),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        writer_node,
+        "retrieve_user_assets",
+        AsyncMock(side_effect=AssertionError("should not call retrieve_user_assets")),
+        raising=False,
+    )
+
+    state = {"user_id": "u1", "question": "Q", "max_chars": 100}
+    result = await _call_node(writer_node.load_assets, state)
+
+    assert result.get("error") == "no_selected_repos"
+    assert result.get("assets") == []
+
+
+@pytest.mark.asyncio
 async def test_load_assets_empty_result_sets_error(monkeypatch):
+    monkeypatch.setattr(
+        writer_node,
+        "get_selected_repos",
+        AsyncMock(return_value=["owner/r1"]),
+        raising=False,
+    )
     monkeypatch.setattr(
         writer_node,
         "retrieve_user_assets",
@@ -168,10 +203,17 @@ async def test_load_assets_success(monkeypatch):
     assets_out = [
         {"id": "a1", "document": "요약1", "metadata": {"type": "code"}},
     ]
+    mock_retrieve = AsyncMock(return_value=assets_out)
+    monkeypatch.setattr(
+        writer_node,
+        "get_selected_repos",
+        AsyncMock(return_value=["owner/repo"]),
+        raising=False,
+    )
     monkeypatch.setattr(
         writer_node,
         "retrieve_user_assets",
-        AsyncMock(return_value=assets_out),
+        mock_retrieve,
         raising=False,
     )
 
@@ -185,6 +227,91 @@ async def test_load_assets_success(monkeypatch):
 
     assert not result.get("error")
     assert result.get("assets") == assets_out
+    mock_retrieve.assert_awaited_once_with(
+        user_id="u1",
+        source_filter=None,
+        type_filter=None,
+        repo_filter=["owner/repo"],
+        top_k=20,
+    )
+
+
+@pytest.mark.asyncio
+async def test_load_assets_primary_repo_merges_primary_and_supplement(monkeypatch):
+    """primary_repo: 최대 15 + 다른 레포당 최대 5, id 중복 제거, 총 20."""
+    calls: list[dict[str, Any]] = []
+
+    async def fake_retrieve(**kwargs: Any) -> list[dict[str, Any]]:
+        calls.append(kwargs)
+        rf = kwargs.get("repo_filter") or []
+        top_k = kwargs.get("top_k", 0)
+        if rf == ["p/a"]:
+            return [{"id": f"a{i}", "document": f"p{i}", "metadata": {"repo": "p/a"}} for i in range(min(15, top_k))]
+        if rf == ["p/b"]:
+            return [{"id": f"b{i}", "document": f"s{i}", "metadata": {"repo": "p/b"}} for i in range(min(5, top_k))]
+        return []
+
+    monkeypatch.setattr(
+        writer_node,
+        "get_selected_repos",
+        AsyncMock(return_value=["p/a", "p/b"]),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        writer_node,
+        "retrieve_user_assets",
+        fake_retrieve,
+        raising=False,
+    )
+
+    state = {
+        "user_id": "u1",
+        "primary_repo": "p/a",
+        "question": "Q",
+        "max_chars": 100,
+    }
+    result = await _call_node(writer_node.load_assets, state)
+
+    assert not result.get("error")
+    assets = result.get("assets") or []
+    assert len(assets) == 20
+    assert calls[0]["repo_filter"] == ["p/a"] and calls[0]["top_k"] == 15
+    assert calls[1]["repo_filter"] == ["p/b"] and calls[1]["top_k"] == 5
+
+
+@pytest.mark.asyncio
+async def test_load_assets_primary_repo_empty_falls_back_to_all_repos(monkeypatch):
+    async def fake_retrieve(**kwargs: Any) -> list[dict[str, Any]]:
+        rf = kwargs.get("repo_filter") or []
+        if rf == ["p/x"]:
+            return []
+        if rf == ["p/x", "p/y"]:
+            return [{"id": "z1", "document": "d", "metadata": {"repo": "p/y"}}]
+        return []
+
+    monkeypatch.setattr(
+        writer_node,
+        "get_selected_repos",
+        AsyncMock(return_value=["p/x", "p/y"]),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        writer_node,
+        "retrieve_user_assets",
+        fake_retrieve,
+        raising=False,
+    )
+
+    state = {
+        "user_id": "u1",
+        "primary_repo": "p/x",
+        "question": "Q",
+        "max_chars": 100,
+    }
+    result = await _call_node(writer_node.load_assets, state)
+
+    assert not result.get("error")
+    assert (result.get("assets") or []) == [{"id": "z1", "document": "d", "metadata": {"repo": "p/y"}}]
 
 
 # ---------------------------------------------------------------------------

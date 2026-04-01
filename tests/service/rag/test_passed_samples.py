@@ -45,8 +45,10 @@ def test_build_where_none_when_all_missing() -> None:
     assert _build_where_clause(None, None, None) is None
 
 
-def test_build_where_single_field() -> None:
-    assert _build_where_clause("ACME", None, None) == {"company": {"$eq": "ACME"}}
+def test_build_where_none_when_only_one_or_two_fields() -> None:
+    assert _build_where_clause("ACME", None, None) is None
+    assert _build_where_clause("ACME", "백엔드", None) is None
+    assert _build_where_clause(None, "백엔드", "2024") is None
 
 
 def test_build_where_and_three_fields() -> None:

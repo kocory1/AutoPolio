@@ -183,6 +183,44 @@ async def test_retrieve_user_assets_builds_where_clause(monkeypatch):
         }
 
 
+@pytest.mark.asyncio
+async def test_retrieve_user_assets_builds_where_clause_with_repo_filter(monkeypatch):
+    fake = _make_fake_query_sync([])
+    monkeypatch.setattr("src.service.rag.user_assets._query_user_assets_sync", fake)
+
+    await retrieve_user_assets(
+        user_id="u1",
+        source_filter=["github"],
+        type_filter=None,
+        repo_filter=["a/b", "c/d"],
+        top_k=3,
+    )
+
+    for call in fake.calls:
+        assert call["where"] == {
+            "$and": [
+                {"source": {"$in": ["github"]}},
+                {"repo": {"$in": ["a/b", "c/d"]}},
+            ]
+        }
+
+
+@pytest.mark.asyncio
+async def test_retrieve_user_assets_empty_repo_filter_returns_empty(monkeypatch):
+    called = []
+
+    def fake_sync(*args, **kwargs):
+        called.append(1)
+        return []
+
+    monkeypatch.setattr("src.service.rag.user_assets._query_user_assets_sync", fake_sync)
+
+    result = await retrieve_user_assets(user_id="u1", repo_filter=[], top_k=5)
+
+    assert result == []
+    assert called == []
+
+
 def test_portfolio_star_query_backward_compat():
     """PORTFOLIO_STAR_QUERY 상수가 삭제되지 않고 유지되는지 확인한다."""
     assert isinstance(PORTFOLIO_STAR_QUERY, str)

@@ -68,6 +68,20 @@ def tmp_db(monkeypatch: pytest.MonkeyPatch, tmp_path):
             """,
             ("u1", "testlogin", "tok", "2026-03-01", "2026-03-01"),
         )
+        await conn.execute(
+            """
+            INSERT INTO selected_repos (user_id, repo_full_name, created_at)
+            VALUES (?, ?, ?)
+            """,
+            ("u1", "owner/repo-a", "2026-03-01"),
+        )
+        await conn.execute(
+            """
+            INSERT INTO selected_repos (user_id, repo_full_name, created_at)
+            VALUES (?, ?, ?)
+            """,
+            ("u1", "owner/repo-b", "2026-03-01"),
+        )
         await conn.commit()
         await conn.close()
 
@@ -78,6 +92,10 @@ def tmp_db(monkeypatch: pytest.MonkeyPatch, tmp_path):
 @pytest.fixture
 def draft_client(monkeypatch: pytest.MonkeyPatch, tmp_db) -> TestClient:
     """create_app()에 등록된 cover-letter 라우터로 TestClient."""
+    monkeypatch.setattr(
+        "src.api.cover_letter.ensure_selected_repos_embedded",
+        AsyncMock(return_value=None),
+    )
     return TestClient(create_app())
 
 
@@ -110,7 +128,22 @@ def test_draft_missing_questions_field(draft_client: TestClient) -> None:
 def test_draft_success_single_question(draft_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeGraph:
         async def ainvoke(self, state: dict) -> dict:
-            return {"draft": "테스트 초안"}
+            return {
+                "draft": "테스트 초안",
+                "assets": [
+                    {"id": "a", "metadata": {"repo": "owner/repo-a"}},
+                    {"id": "b", "metadata": {"repo": "owner/repo-a"}},
+                    {"id": "c", "metadata": {"repo": "owner/repo-b"}},
+                ],
+                "samples": [
+                    {
+                        "id": "s1",
+                        "company": "SK플래닛",
+                        "position": "신입 앱개발자",
+                        "question": "개발 역량을 보여줄 수 있는 프로젝트를 서술하세요.",
+                    }
+                ],
+            }
 
     monkeypatch.setattr("src.api.cover_letter.build_writer_graph", lambda: FakeGraph())
     monkeypatch.setattr(
@@ -146,6 +179,17 @@ def test_draft_success_single_question(draft_client: TestClient, monkeypatch: py
     assert d0.get("answer") == "테스트 초안"
     assert d0.get("char_count") == len("테스트 초안")
     assert "used_assets" in body
+    ua = body["used_assets"]
+    assert ua.get("accepted_essays_used") is True
+    essays = ua.get("accepted_essays") or []
+    assert len(essays) == 1
+    assert essays[0].get("company") == "SK플래닛"
+    assert essays[0].get("position") == "신입 앱개발자"
+    assert "개발 역량" in (essays[0].get("question") or "")
+    gh = ua.get("github_repos") or []
+    assert len(gh) == 2
+    names = sorted(x.get("full_name") for x in gh if isinstance(x, dict))
+    assert names == ["owner/repo-a", "owner/repo-b"]
     assert "created_at" in body
 
 
@@ -195,7 +239,7 @@ def test_draft_success_with_job_id(draft_client: TestClient, monkeypatch: pytest
     class FakeGraph:
         async def ainvoke(self, state: dict) -> dict:
             captured["job_parsed"] = state.get("job_parsed")
-            return {"draft": "x"}
+            return {"draft": "x", "assets": [], "samples": []}
 
     monkeypatch.setattr("src.api.cover_letter.build_writer_graph", lambda: FakeGraph())
     monkeypatch.setattr(
@@ -222,6 +266,10 @@ def test_draft_success_with_job_id(draft_client: TestClient, monkeypatch: pytest
     )
     assert r.status_code == 200, r.text
     assert captured.get("job_parsed") == expected_job_parsed
+    ua0 = r.json()["used_assets"]
+    assert ua0["accepted_essays_used"] is False
+    assert ua0.get("accepted_essays") == []
+    assert ua0["github_repos"] == []
 
     captured.clear()
 
@@ -253,12 +301,18 @@ def test_draft_success_with_job_id(draft_client: TestClient, monkeypatch: pytest
 
 def test_draft_success_multiple_questions(draft_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict] = []
+    n = [0]
 
     class FakeGraph:
         async def ainvoke(self, state: dict) -> dict:
             calls.append(dict(state))
             q = state.get("question", "")
-            return {"draft": f"답-{q[:4]}"}
+            n[0] += 1
+            return {
+                "draft": f"답-{q[:4]}",
+                "assets": [{"metadata": {"repo": f"o/r-{n[0]}"}}],
+                "samples": [] if n[0] > 1 else [{"x": 1}],
+            }
 
     async def fake_persist(_user_id: str, rows: list[dict]) -> list[dict]:
         out: list[dict] = []
@@ -289,12 +343,22 @@ def test_draft_success_multiple_questions(draft_client: TestClient, monkeypatch:
     body = r.json()
     assert len(body["drafts"]) == 3
     assert len(calls) == 3
+    assert [c.get("primary_repo") for c in calls] == [
+        "owner/repo-a",
+        "owner/repo-b",
+        "owner/repo-a",
+    ]
+    ua = body["used_assets"]
+    assert ua["accepted_essays_used"] is True
+    assert ua.get("accepted_essays") == []
+    gh = sorted(x["full_name"] for x in ua["github_repos"])
+    assert gh == ["o/r-1", "o/r-2", "o/r-3"]
 
 
 def test_draft_graph_error_returns_partial(draft_client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeGraph:
         async def ainvoke(self, state: dict) -> dict:
-            return {"error": "no_github_assets", "draft": ""}
+            return {"error": "no_github_assets", "draft": "", "assets": [], "samples": []}
 
     monkeypatch.setattr("src.api.cover_letter.build_writer_graph", lambda: FakeGraph())
     monkeypatch.setattr(
@@ -319,3 +383,27 @@ def test_draft_graph_error_returns_partial(draft_client: TestClient, monkeypatch
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["drafts"][0].get("answer") == ""
+    assert body["used_assets"]["github_repos"] == []
+    assert body["used_assets"]["accepted_essays_used"] is False
+    assert body["used_assets"].get("accepted_essays") == []
+
+
+@pytest.mark.asyncio
+async def test_ensure_selected_repos_embedded_invokes_job_when_chroma_empty(
+    monkeypatch: pytest.MonkeyPatch, tmp_db
+) -> None:
+    monkeypatch.setattr("src.api.cover_letter._repo_has_embedding_docs", lambda _u, _r: False)
+    monkeypatch.setattr(
+        "src.api.cover_letter.fetch_code_document_ids_for_repo",
+        AsyncMock(return_value=["owner/repo-a/foo.py"]),
+    )
+    mock_job = AsyncMock(return_value={"embedded": 1})
+    monkeypatch.setattr("src.api.cover_letter.run_github_repo_embedding_job", mock_job)
+
+    from src.api.cover_letter import ensure_selected_repos_embedded
+
+    await ensure_selected_repos_embedded("u1", ["owner/repo-a"])
+    mock_job.assert_awaited_once()
+    assert mock_job.await_args.kwargs["user_id"] == "u1"
+    assert mock_job.await_args.kwargs["repo_full_name"] == "owner/repo-a"
+    assert mock_job.await_args.kwargs["code_document_ids"] == ["owner/repo-a/foo.py"]
