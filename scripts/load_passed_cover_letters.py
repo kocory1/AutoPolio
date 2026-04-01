@@ -20,10 +20,10 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # noqa: E402
 
-from src.db.vector.chroma import get_chroma_client
-from src.service.rag.passed_samples import PASSED_COVER_LETTERS_COLLECTION
+from src.db.vector.chroma import get_chroma_client  # noqa: E402
+from src.service.rag.passed_samples import PASSED_COVER_LETTERS_COLLECTION  # noqa: E402
 
 load_dotenv(ROOT / ".env")
 
