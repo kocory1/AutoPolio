@@ -6,6 +6,12 @@ from src.service.rag import retrieve_user_assets
 from src.service.rag.user_assets import PORTFOLIO_STAR_QUERIES, PORTFOLIO_STAR_QUERY
 
 
+@pytest.fixture(autouse=True)
+def _clear_openai_api_key(monkeypatch):
+    """단위 테스트는 텍스트 쿼리 경로만 쓰도록 한다(실 OpenAI·Chroma 호출 방지)."""
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+
 # ---------------------------------------------------------------------------
 # 헬퍼
 # ---------------------------------------------------------------------------
@@ -177,6 +183,44 @@ async def test_retrieve_user_assets_builds_where_clause(monkeypatch):
         }
 
 
+@pytest.mark.asyncio
+async def test_retrieve_user_assets_builds_where_clause_with_repo_filter(monkeypatch):
+    fake = _make_fake_query_sync([])
+    monkeypatch.setattr("src.service.rag.user_assets._query_user_assets_sync", fake)
+
+    await retrieve_user_assets(
+        user_id="u1",
+        source_filter=["github"],
+        type_filter=None,
+        repo_filter=["a/b", "c/d"],
+        top_k=3,
+    )
+
+    for call in fake.calls:
+        assert call["where"] == {
+            "$and": [
+                {"source": {"$in": ["github"]}},
+                {"repo": {"$in": ["a/b", "c/d"]}},
+            ]
+        }
+
+
+@pytest.mark.asyncio
+async def test_retrieve_user_assets_empty_repo_filter_returns_empty(monkeypatch):
+    called = []
+
+    def fake_sync(*args, **kwargs):
+        called.append(1)
+        return []
+
+    monkeypatch.setattr("src.service.rag.user_assets._query_user_assets_sync", fake_sync)
+
+    result = await retrieve_user_assets(user_id="u1", repo_filter=[], top_k=5)
+
+    assert result == []
+    assert called == []
+
+
 def test_portfolio_star_query_backward_compat():
     """PORTFOLIO_STAR_QUERY 상수가 삭제되지 않고 유지되는지 확인한다."""
     assert isinstance(PORTFOLIO_STAR_QUERY, str)
@@ -186,3 +230,44 @@ def test_portfolio_star_query_backward_compat():
 def test_portfolio_star_queries_count():
     """PORTFOLIO_STAR_QUERIES 가 5개 쿼리를 포함하는지 확인한다."""
     assert len(PORTFOLIO_STAR_QUERIES) == 5
+
+
+@pytest.mark.asyncio
+async def test_retrieve_user_assets_uses_openai_query_embeddings_when_key_set(monkeypatch):
+    """OPENAI_API_KEY 가 있으면 query_embeddings 경로를 탄다(인제스트와 동일 임베딩 공간)."""
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test-key")
+    vecs = [[float(i + j) for j in range(8)] for i in range(len(PORTFOLIO_STAR_QUERIES))]
+
+    class _FakeEmbedder:
+        async def embed(self, texts: list[str]) -> list[list[float]]:
+            assert texts == PORTFOLIO_STAR_QUERIES
+            return vecs
+
+    monkeypatch.setattr(
+        "src.service.github_embedding.openai_embedder.OpenAIEmbedder",
+        lambda *a, **k: _FakeEmbedder(),
+    )
+
+    emb_calls: list[list[float]] = []
+
+    def fake_sync_embedding(user_id, query_embedding, where, top_k):
+        emb_calls.append(query_embedding)
+        return [
+            {
+                "id": f"id-{len(emb_calls)}",
+                "document": "d",
+                "metadata": {},
+                "distance": 0.1,
+            }
+        ]
+
+    monkeypatch.setattr(
+        "src.service.rag.user_assets._query_user_assets_sync_embedding",
+        fake_sync_embedding,
+    )
+
+    result = await retrieve_user_assets(user_id="u1", top_k=10)
+
+    assert len(emb_calls) == len(PORTFOLIO_STAR_QUERIES)
+    assert emb_calls == vecs
+    assert len(result) == 5

@@ -394,19 +394,23 @@ curl -X GET "https://example.com/api/github/repos/123/commits?author=Ara5429&per
 
 ---
 
-## 5. 임베딩 API
+## 5. 임베딩 API (구현 기준)
+
+> **구현 파일:** `src/api/github.py` — `GitHubEmbeddingRequestBody`, `run_github_repo_embedding_job`.  
+> 과거 초안이었던 `paths[]` / `strategy` / `force_refresh` 필드는 **없다**. 아래가 SSoT다.
 
 ### 5.1 POST `/api/github/repos/{repo_id}/embedding`
 
-- **설명:** 지정된 레포/경로에 대해 임베딩을 생성하고 VectorDB/DB에 저장한 뒤, 요약 정보를 반환.
+- **설명:** 선택된 레포(`owner/name` 형식, URL 인코딩 시 `owner%2Fname`)에 대해 **코드 문서 id** 목록으로 Chroma `user_assets_{user_id}` 적재 및 SQLite `asset_hierarchy`의 folder/project 행 동기화를 수행한다.  
+- **전제:** `repo_id`는 **PUT /api/user/selected-repos** 로 저장된 레포여야 한다. 아니면 **403 FORBIDDEN** (`REPO_NOT_SELECTED`).
 
 #### 1. Request Syntax
 
 ```bash
-curl -X POST "https://example.com/api/github/repos/123/embedding" \
-  -H "Authorization: Bearer <app-session-token>" \
+curl -X POST "https://example.com/api/github/repos/owner%2Frepo-a/embedding" \
+  -H "Cookie: session=..." \
   -H "Content-Type: application/json" \
-  -d '{"paths":["src/","README.md"],"branch":"main","strategy":"code_and_docs_v1","force_refresh":false}'
+  -d '{"code_document_ids":[],"ref":"main","include_summaries":false}'
 ```
 
 #### 2. Request Header
@@ -417,115 +421,48 @@ curl -X POST "https://example.com/api/github/repos/123/embedding" \
 | Authorization | `Bearer <app-session-token>` | Cookie 또는 Authorization 중 하나 필수 |
 | Content-Type | `application/json` | Y |
 
-#### 3. Request Element
+#### 3. Request Body (JSON)
 
 | 파라미터 | 타입 | 필수 | 설명 |
 |----------|------|------|------|
-| repo_id | integer \| string | Y | Path. GitHub 레포 ID 또는 `"owner/name"` |
-| paths | array&lt;string&gt; | Y | 비어 있지 않은 배열 |
-| branch | string | N | default=레포 default_branch |
-| strategy | string | N | default=code_and_docs_v1 |
-| force_refresh | boolean | N | default=false |
+| code_document_ids | array&lt;string&gt; | N | 임베딩할 코드 문서 id. Chroma id 규칙: ``{owner/repo}/{repo내 상대경로}`` (예: `owner/repo/src/app.py`). **비어 있으면** SQLite `asset_hierarchy`에서 해당 레포의 `type=code` id를 읽어 전부 사용한다. |
+| ref | string | N | 브랜치 또는 SHA (GitHub Contents API 조회에 사용) |
+| include_summaries | boolean | N | `true`이면 응답에 요약 텍스트 배열 포함(응답 크기 증가) |
 
-### paths[] 선택 레벨 규칙
+**권장 흐름 (대시보드와 동일):**
 
-| 선택 레벨 | UI 동작 | paths[] 예시 |
-|----------|---------|-------------|
-| 레포 전체 | 레포 체크박스 선택 | `["/"]` |
-| 폴더 선택 | 폴더 펼치고 체크 | `["src/", "docs/"]` |
-| 파일 개별 선택 | 파일 체크박스 | `["src/main.py", "README.md"]` |
-| 혼합 | 폴더 + 개별 파일 | `["src/auth/", "README.md"]` |
+1. **POST /api/user/asset-hierarchy/sync-from-assets** — `selected_repo_assets`의 code 경로를 `asset_hierarchy`에 반영  
+2. **POST /api/github/repos/{owner%2Frepo}/embedding** — `code_document_ids: []` 로 DB에 있는 code id만으로 임베딩  
+   또는 Files Tree에서 고른 파일로 `owner/repo/경로` id를 채워 **명시 모드**로 호출
 
-**백엔드 처리 규칙:**
-
-- `"/"` → 레포 전체 트리 순회 (루트부터 모든 파일 포함)
-- `"src/"` (끝이 `/`) → 해당 폴더 하위 전체 재귀 포함
-- `"src/main.py"` (끝이 파일명) → 해당 파일만
-- **중복 경로 자동 제거:** 폴더 + 그 안의 파일 동시 선택 시 폴더 기준 합산
-
-**전제 조건:**
-
-- 임베딩은 반드시 **selected_repos**에 등록된 레포에 대해서만 수행 가능. selected_repos에 없는 repo_id로 호출 시 **403 FORBIDDEN** 반환.
+`code_document_ids`가 비어 있고, `asset_hierarchy`에 해당 레포의 code 행이 없으면 **400 BAD_REQUEST** (`NO_CODE_ASSETS_IN_HIERARCHY`).
 
 #### 4. Response
 
-**200 OK (임베딩 생성 및 저장 완료)**
+**200 OK** — 본문 예:
 
 ```json
 {
-  "repo_id": 123,
-  "branch": "main",
-  "paths": ["src/", "README.md"],
-  "strategy": "code_and_docs_v1",
-  "status": "completed",
-  "embedding": {
-    "chunks_indexed": 128,
-    "dimensions": 1536,
-    "total_tokens": 45231,
-    "storage": {
-      "type": "vectordb",
-      "index_name": "autofolio_github_repo_123_main",
-      "last_updated_at": "2026-03-04T10:23:45Z"
-    }
-  },
-  "hierarchy_nodes_created": 243
+  "status": "ok",
+  "embedded": 12,
+  "ids": ["owner/repo/src/main.py", "owner/repo/README.md"]
 }
 ```
 
-**200 OK (캐시 히트, 이미 최신 상태)**
+| 필드 | 설명 |
+|------|------|
+| status | `"ok"` |
+| embedded | Chroma에 적재한 문서 수(코드·폴더·프로젝트 노드 합산에 가깝게 카운트) |
+| ids | 저장된 문서 id 목록 |
+| summaries | `include_summaries=true`일 때만. `{ id, type, path, summary }` 형태 배열 |
 
-```json
-{
-  "repo_id": 123,
-  "branch": "main",
-  "paths": ["src/"],
-  "strategy": "code_and_docs_v1",
-  "status": "completed",
-  "embedding": {
-    "chunks_indexed": 128,
-    "dimensions": 1536,
-    "total_tokens": 45231,
-    "storage": {
-      "type": "vectordb",
-      "index_name": "autofolio_github_repo_123_main",
-      "last_updated_at": "2026-03-01T09:00:00Z"
-    },
-    "cache_hit": true
-  },
-  "hierarchy_nodes_created": 0
-}
-```
-
-| 필드 | 타입 | 설명 |
-|------|------|------|
-| repo_id | integer | GitHub 레포 ID |
-| branch | string | 브랜치명 |
-| paths | array&lt;string&gt; | 요청한 경로 목록 |
-| strategy | string | 사용된 임베딩 전략 |
-| status | string | completed 등 |
-| embedding | object | chunks_indexed, dimensions, total_tokens, storage 등 |
-| hierarchy_nodes_created | integer | asset_hierarchy 테이블에 생성된 노드 수 (code+folder+project 합산). 캐시 히트 시 0 |
-
-#### asset_hierarchy 연동
-
-임베딩 생성 시 **asset_hierarchy** 테이블이 함께 갱신된다.
-
-| API 호출 | DB 동작 |
-|----------|---------|
-| PUT /api/user/selected-repos | selected_repos upsert |
-| POST /api/github/repos/{id}/embedding | asset_hierarchy 전체 재생성 + ChromaDB upsert |
-
-- `asset_hierarchy.id` = ChromaDB `user_assets_{user_id}`의 document id와 동일.
-- RAPTOR bottom-up 순서: **code → folder → project**
-- 재임베딩 시 해당 **selected_repo_id**의 asset_hierarchy 행 전부 삭제 후 재생성.
+파이프라인은 코드 파일 → 폴더(bottom-up) → 프로젝트 루트 순으로 요약·임베딩한다. `asset_hierarchy`의 folder/project 행은 임베딩 후 **선택된 code_document_ids** 기준으로 동기화된다.
 
 | 상태코드 | error | 발생조건 |
 |----------|-------|----------|
-| 400 | BAD_REQUEST | paths가 비어 있거나 배열이 아님 |
+| 400 | BAD_REQUEST | 잘못된 repo_id, 또는 임베딩할 code id 없음 |
 | 401 | UNAUTHORIZED | 로그인 필요 |
-| 403 | FORBIDDEN | 해당 repo_id가 selected_repos에 등록되지 않음 |
-| 404 | NOT_FOUND | 레포 없음 |
-| 409 | EMBEDDING_IN_PROGRESS | 해당 레포/브랜치에 대한 임베딩 작업이 이미 진행 중 |
-| 502 | EMBEDDING_FAILED | 임베딩 생성 중 오류 |
+| 403 | FORBIDDEN | 레포가 selected_repos에 없음 |
+| 500 | INTERNAL_SERVER_ERROR | `EMBEDDING_FAILED` 등 서버 처리 실패 |
 
 > 공통 에러(400/401/403/404/500/502)는 공통 규칙 참고.

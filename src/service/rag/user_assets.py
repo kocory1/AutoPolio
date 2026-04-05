@@ -8,6 +8,7 @@ ChromaDB `user_assets_{user_id}` 컬렉션을 조회한다.
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any
 
 from src.db.vector import get_user_asset_collection
@@ -56,13 +57,16 @@ PORTFOLIO_STAR_QUERIES: list[str] = [
 def _build_where_clause(
     source_filter: list[str] | None,
     type_filter: list[str] | None,
+    repo_filter: list[str] | None = None,
 ) -> dict[str, Any] | None:
-    """Chroma where 절을 생성한다."""
+    """Chroma where 절을 생성한다. repo_filter가 비어 있지 않으면 repo 메타로 제한."""
     conditions: list[dict[str, Any]] = []
     if source_filter:
         conditions.append({"source": {"$in": source_filter}})
     if type_filter:
         conditions.append({"type": {"$in": type_filter}})
+    if repo_filter is not None and len(repo_filter) > 0:
+        conditions.append({"repo": {"$in": repo_filter}})
 
     if not conditions:
         return None
@@ -108,6 +112,24 @@ def _query_user_assets_sync(
     return _normalize_results(raw)
 
 
+def _query_user_assets_sync_embedding(
+    user_id: str,
+    query_embedding: list[float],
+    where: dict[str, Any] | None,
+    top_k: int,
+) -> list[dict]:
+    """GitHub 파이프라인이 OpenAI 임베딩으로 적재한 벡터와 동일 공간에서 검색한다."""
+    collection = get_user_asset_collection(user_id)
+    kwargs: dict[str, Any] = {
+        "query_embeddings": [query_embedding],
+        "n_results": top_k,
+    }
+    if where is not None:
+        kwargs["where"] = where
+    raw = collection.query(**kwargs)
+    return _normalize_results(raw)
+
+
 def _merge_and_deduplicate(results_per_query: list[list[dict]], top_k: int) -> list[dict]:
     """다중 쿼리 결과를 id 기준으로 중복 제거 후 distance 오름차순으로 반환한다.
 
@@ -137,21 +159,46 @@ async def retrieve_user_assets(
     user_id: str,
     source_filter: list[str] | None = None,
     type_filter: list[str] | None = None,
+    repo_filter: list[str] | None = None,
     top_k: int = 20,
 ) -> list[dict]:
     """유저 에셋을 조회해 반환한다.
 
     - STAR 관점별 다중 쿼리로 GitHub 임베딩 문서와의 의미 거리를 좁혀 recall 향상
     - 각 쿼리마다 top_k 개씩 검색 후 id 기준 중복 제거, distance 오름차순으로 최종 top_k 반환
-    - source/type 필터는 where 절로 적용
+    - source/type/repo 필터는 where 절로 적용 (repo_filter가 빈 리스트면 결과 없음)
     - 반환: [{id, document, metadata, distance}, ...]
     """
     if not user_id:
         raise ValueError("user_id is required")
     if top_k <= 0:
         raise ValueError("top_k must be greater than 0")
+    if repo_filter is not None and len(repo_filter) == 0:
+        return []
 
-    where = _build_where_clause(source_filter, type_filter)
+    where = _build_where_clause(source_filter, type_filter, repo_filter)
+
+    # GitHub 임베딩은 OpenAI API로 벡터를 넣는다. query_texts 는 컬렉션 기본 임베더(MiniLM 등)를
+    # 쓰므로 차원·공간이 달라 검색이 비거나 실패할 수 있다. OPENAI_API_KEY 가 있으면 동일 모델로
+    # 쿼리 벡터를 만든 뒤 query_embeddings 로 검색한다.
+    if os.getenv("OPENAI_API_KEY"):
+        from src.service.github_embedding.openai_embedder import OpenAIEmbedder
+
+        embedder = OpenAIEmbedder()
+        embeddings = await embedder.embed(PORTFOLIO_STAR_QUERIES)
+        results_per_query = await asyncio.gather(
+            *[
+                asyncio.to_thread(
+                    _query_user_assets_sync_embedding,
+                    user_id,
+                    emb,
+                    where,
+                    top_k,
+                )
+                for emb in embeddings
+            ]
+        )
+        return _merge_and_deduplicate(list(results_per_query), top_k)
 
     results_per_query = await asyncio.gather(
         *[

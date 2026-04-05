@@ -94,6 +94,7 @@ curl -X POST "https://example.com/api/user/documents" \
 
 ### 1.1 POST `/api/jobs/parse`
 
+- **구현:** `src/api/jobs.py` — `manual`은 즉시 DB 저장, `url`은 HTTP 수집 후 `OPENAI_API_KEY`가 있으면 JSON 구조화, 없으면 본문 스니펫을 `duties` 등에 휴리스틱 저장.
 - **설명:** 채용공고 입력을 두 가지 방식으로 받아 **담당 업무 / 자격 요건 / 우대 사항 / 기업명 / 기업 인재상 / 포지션명** 6개 항목을 확보한 뒤 **jobs 테이블에 저장**하고 `job_id`를 반환한다.  
   - **source_type=url:** `url` 필수. 서버가 해당 URL을 크롤링 후 LLM으로 파싱. url 기준으로 신규 저장하며, 항상 jobs에 한 건을 남긴다. 크롤링 실패 시 400 CRAWL_FAILED.  
   - **source_type=manual:** url 없음. 사용자가 6개 항목 직접 입력. position_title, company_name 필수, 나머지 선택. 항상 신규 저장(UUID id, 중복 체크 없음).

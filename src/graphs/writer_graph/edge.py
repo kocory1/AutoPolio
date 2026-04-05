@@ -33,12 +33,12 @@ def after_load_assets(state: WriterState) -> str:
 def after_self_consistency(state: WriterState) -> str:
     """self_consistency 이후 분기.
 
-    - 통과 → format_output
-    - 실패 & draft_retry_count < MAX → generate_draft (피드백 프롬프트 반영 재생성)
-    - 실패 & draft_retry_count >= MAX → format_output (재시도 상한, 그대로 진행)
+    - is_hallucination False(환각 없음) → format_output
+    - is_hallucination True & draft_retry_count < MAX → generate_draft (피드백 반영 재생성)
+    - is_hallucination True & draft_retry_count >= MAX → format_output (재시도 상한)
     """
-    passed = state.get("is_hallucination")
-    if passed:
+    has_hallucination = state.get("is_hallucination")
+    if not has_hallucination:
         return "format_output"
     retry = state.get("draft_retry_count") or 0
     if retry < MAX_DRAFT_RETRIES:
