@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Body, Request, Response
 from fastapi.responses import JSONResponse, PlainTextResponse
+from openai import RateLimitError
 from pydantic import BaseModel, Field
 
 from src.db.sqlite.client import connect
@@ -20,8 +22,21 @@ from src.service.user.repos import (
     upsert_selected_repos,
 )
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["GitHub"])
+
+
+def _openai_nested_error_code(exc: Exception) -> str | None:
+    """OpenAI 응답 body가 ``{ \"error\": { \"code\": ... } }`` 형태일 때 code 추출."""
+    body = getattr(exc, "body", None)
+    if not isinstance(body, dict):
+        return None
+    inner = body.get("error")
+    if isinstance(inner, dict):
+        c = inner.get("code")
+        return str(c) if c else None
+    return None
 
 
 class GitHubEmbeddingRequestBody(BaseModel):
@@ -393,7 +408,29 @@ async def github_repo_embedding(
         )
     except ValueError as exc:
         return _error_response(400, "BAD_REQUEST", str(exc))
-    except Exception:
+    except RateLimitError as exc:
+        logger.exception(
+            "embedding OpenAI rate limit repo=%s user_id=%s: %s",
+            full_name,
+            user_id,
+            exc,
+        )
+        code = _openai_nested_error_code(exc)
+        if code == "insufficient_quota":
+            return _error_response(
+                503,
+                "SERVICE_UNAVAILABLE",
+                "OPENAI_QUOTA_EXCEEDED",
+            )
+        return _error_response(503, "SERVICE_UNAVAILABLE", "OPENAI_RATE_LIMIT")
+    except Exception as exc:
+        # 실제 원인은 응답에 넣지 않고, 서버 로그(터미널)에서 확인한다.
+        logger.exception(
+            "embedding job failed repo=%s user_id=%s: %s",
+            full_name,
+            user_id,
+            exc,
+        )
         return _error_response(500, "INTERNAL_SERVER_ERROR", "EMBEDDING_FAILED")
 
     return JSONResponse({"status": "ok", **result})

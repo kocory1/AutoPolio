@@ -1,0 +1,317 @@
+        }
+      });
+
+      const WRITER_Q_MIN = 1;
+      const WRITER_Q_MAX = 5;
+
+      function collectWriterQuestions() {
+        const list = document.getElementById('writerQuestionList');
+        if (!list) return [];
+        const out = [];
+        list.querySelectorAll('.wd-q-row').forEach((row) => {
+          const ta = row.querySelector('.wd-q-text');
+          const nm = row.querySelector('.wd-q-max');
+          const t = ta && ta.value ? String(ta.value).trim() : '';
+          const maxChars = Math.max(1, parseInt(nm && nm.value ? nm.value : '500', 10) || 500);
+          out.push({ question_text: t, max_chars: maxChars });
+        });
+        return out;
+      }
+
+      function refreshWriterRemoveButtons() {
+        const list = document.getElementById('writerQuestionList');
+        if (!list) return;
+        const n = list.children.length;
+        list.querySelectorAll('.wd-q-remove').forEach((btn) => {
+          btn.disabled = n <= WRITER_Q_MIN;
+        });
+        const addBtn = document.getElementById('btnWriterAddQ');
+        if (addBtn) addBtn.disabled = n >= WRITER_Q_MAX;
+      }
+
+      function addWriterQuestionRow() {
+        const list = document.getElementById('writerQuestionList');
+        if (!list || list.children.length >= WRITER_Q_MAX) return;
+        const wrap = document.createElement('div');
+        wrap.className = 'wd-q-row';
+        const top = document.createElement('div');
+        top.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;';
+        const lab = document.createElement('span');
+        lab.style.fontWeight = '600';
+        lab.style.color = '#0f172a';
+        lab.textContent = '문항';
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'wd-q-remove btn-demo-ghost';
+        rm.textContent = '삭제';
+        rm.addEventListener('click', () => {
+          if (list.children.length <= WRITER_Q_MIN) return;
+          wrap.remove();
+          refreshWriterRemoveButtons();
+        });
+        top.appendChild(lab);
+        top.appendChild(rm);
+        const ta = document.createElement('textarea');
+        ta.className = 'wd-q-text';
+        ta.rows = 3;
+        ta.placeholder = '지원 동기를 작성해주세요.';
+        ta.style.cssText = 'width:100%;min-width:0;padding:8px;border-radius:6px;border:1px solid #cbd5e1;box-sizing:border-box;';
+        const row2 = document.createElement('div');
+        row2.style.marginTop = '8px';
+        const lab2 = document.createElement('label');
+        lab2.style.cssText = 'font-size:0.9rem;color:#334155;margin-right:8px;';
+        lab2.textContent = 'max_chars ';
+        const num = document.createElement('input');
+        num.type = 'number';
+        num.className = 'wd-q-max';
+        num.value = '500';
+        num.min = '1';
+        num.style.cssText = 'width:100px;padding:6px;border-radius:6px;border:1px solid #cbd5e1;';
+        row2.appendChild(lab2);
+        row2.appendChild(num);
+        wrap.appendChild(top);
+        wrap.appendChild(ta);
+        wrap.appendChild(row2);
+        list.appendChild(wrap);
+        refreshWriterRemoveButtons();
+      }
+
+      function initWriterQuestionList() {
+        const list = document.getElementById('writerQuestionList');
+        if (!list || list.children.length) return;
+        addWriterQuestionRow();
+      }
+
+      function hideWriterError() {
+        const el = document.getElementById('writerDraftErrorArea');
+        if (el) el.style.display = 'none';
+        const line = document.getElementById('writerErrorLine');
+        const pre = document.getElementById('writerErrorJson');
+        if (line) line.textContent = '';
+        if (pre) {
+          pre.textContent = '';
+          pre.style.display = 'none';
+        }
+      }
+
+      function resetWriterUsedAssetsDisplay() {
+        const wrap = document.getElementById('writerRepoTags');
+        const badge = document.getElementById('writerEssaysBadge');
+        const listEl = document.getElementById('writerEssaysList');
+        if (wrap) {
+          wrap.innerHTML = '';
+          wrap.style.color = '#64748b';
+          wrap.textContent = '참조 레포 없음';
+        }
+        if (badge) {
+          badge.className = 'wd-essay-no';
+          badge.textContent = '합격 자소서 미참조';
+        }
+        if (listEl) {
+          listEl.innerHTML = '';
+          listEl.style.display = 'none';
+        }
+      }
+
+      function showWriterClientMessage(text) {
+        const errArea = document.getElementById('writerDraftErrorArea');
+        const line = document.getElementById('writerErrorLine');
+        const pre = document.getElementById('writerErrorJson');
+        const cards = document.getElementById('writerDraftCards');
+        if (!errArea || !line || !pre) return;
+        if (cards) cards.innerHTML = '';
+        resetWriterUsedAssetsDisplay();
+        errArea.style.display = 'block';
+        line.textContent = text;
+        pre.style.display = 'none';
+        pre.textContent = '';
+      }
+
+      function showWriterHttpError(status, data) {
+        const errArea = document.getElementById('writerDraftErrorArea');
+        const line = document.getElementById('writerErrorLine');
+        const pre = document.getElementById('writerErrorJson');
+        const cards = document.getElementById('writerDraftCards');
+        if (!errArea || !line || !pre) return;
+        if (cards) cards.innerHTML = '';
+        resetWriterUsedAssetsDisplay();
+        errArea.style.display = 'block';
+        if (status === 401) {
+          line.textContent = '로그인이 필요합니다';
+          pre.style.display = 'none';
+          pre.textContent = '';
+        } else if (status === 400) {
+          line.textContent = '문항을 확인해주세요';
+          pre.style.display = 'none';
+          pre.textContent = '';
+        } else {
+          line.textContent = '';
+          pre.style.display = 'block';
+          pre.textContent = JSON.stringify(data, null, 2);
+        }
+      }
+
+      function setWriterUsedAssets(ua) {
+        ua = ua || {};
+        const repos = Array.isArray(ua.github_repos) ? ua.github_repos : [];
+        const essays = Array.isArray(ua.accepted_essays) ? ua.accepted_essays : [];
+        const wrap = document.getElementById('writerRepoTags');
+        const badge = document.getElementById('writerEssaysBadge');
+        const listEl = document.getElementById('writerEssaysList');
+        if (!wrap || !badge) return;
+        wrap.innerHTML = '';
+        wrap.style.color = '';
+        if (!repos.length) {
+          wrap.style.color = '';
+          wrap.textContent = '참조 레포 없음';
+        } else {
+          repos.forEach((r) => {
+            const fn = (r && r.full_name) ? r.full_name : '';
+            if (!fn) return;
+            const s = document.createElement('span');
+            s.className = 'wd-repo-tag';
+            s.textContent = fn;
+            wrap.appendChild(s);
+          });
+        }
+        const hasEssayList = essays.length > 0;
+        badge.className = ua.accepted_essays_used || hasEssayList ? 'wd-essay-yes' : 'wd-essay-no';
+        badge.textContent = ua.accepted_essays_used || hasEssayList ? '합격 자소서 참조 ✓' : '합격 자소서 미참조';
+        if (listEl) {
+          listEl.innerHTML = '';
+          if (hasEssayList) {
+            listEl.style.display = 'block';
+            essays.forEach((e) => {
+              if (!e || typeof e !== 'object') return;
+              const co = (e.company != null && String(e.company).trim()) ? String(e.company).trim() : '';
+              const po = (e.position != null && String(e.position).trim()) ? String(e.position).trim() : '';
+              const q = (e.question != null && String(e.question).trim()) ? String(e.question).trim() : '';
+              const head = [co, po].filter(Boolean).join(' · ');
+              const line = document.createElement('div');
+              line.className = 'wd-essay-line';
+              const qShort = q.length > 80 ? q.slice(0, 80) + '…' : q;
+              line.textContent = (head ? ('- ' + head + ': "' + qShort + '"') : ('- "' + qShort + '"'));
+              listEl.appendChild(line);
+            });
+          } else {
+            listEl.style.display = 'none';
+          }
+        }
+      }
+
+      function renderWriterDraftsSuccess(data) {
+        hideWriterError();
+        const container = document.getElementById('writerDraftCards');
+        if (!container) return;
+        container.innerHTML = '';
+        const drafts = (data && data.drafts) ? data.drafts : [];
+        drafts.forEach((d) => {
+          const card = document.createElement('div');
+          card.className = 'wd-card';
+          const sub = document.createElement('div');
+          sub.className = 'wd-card-sub';
+          sub.textContent = (d && d.question_text) ? d.question_text : '(문항 없음)';
+          const body = document.createElement('div');
+          body.className = 'wd-card-body';
+          const ans = (d && d.answer !== undefined && d.answer !== null) ? String(d.answer) : '';
+          if (!ans.trim()) {
+            body.classList.add('wd-fail');
+            body.textContent = '생성 실패 (에셋 없음 또는 API 키 미설정)';
+          } else {
+            body.textContent = ans;
+          }
+          const cb = document.createElement('span');
+          cb.className = 'wd-char-badge';
+          const cc = (d && d.char_count !== undefined && d.char_count !== null) ? d.char_count : ans.length;
+          cb.textContent = '글자 수 ' + String(cc);
+          card.appendChild(sub);
+          card.appendChild(body);
+          card.appendChild(cb);
+          container.appendChild(card);
+        });
+        setWriterUsedAssets(data.used_assets || {});
+      }
+
+      safeOnClick('btnWriterAddQ', () => {
+        const list = document.getElementById('writerQuestionList');
+        if (!list || list.children.length >= WRITER_Q_MAX) return;
+        addWriterQuestionRow();
+      });
+
+      safeOnClick('btnWriterDraft', async () => {
+        const selJob = document.getElementById('draftJobSelect');
+        const jobId = (selJob && selJob.value) ? String(selJob.value).trim() : '';
+        const qs = collectWriterQuestions();
+        if (qs.length < WRITER_Q_MIN || qs.length > WRITER_Q_MAX) {
+          showWriterClientMessage('문항을 확인해주세요');
+          setStatus('draft: 문항 개수 오류');
+          return;
+        }
+        if (qs.some((q) => !q.question_text.trim())) {
+          showWriterClientMessage('문항을 확인해주세요');
+          setStatus('draft: 문항 텍스트 누락');
+          return;
+        }
+        const payload = { questions: qs };
+        if (jobId) payload.job_id = jobId;
+        const btn = document.getElementById('btnWriterDraft');
+        const prevLabel = btn ? btn.textContent : '';
+        if (btn) {
+          btn.disabled = true;
+          btn.textContent = '생성 중...';
+        }
+        setStatus('자소서 초안 요청 중…');
+        const panel = document.getElementById('writerDraftDemo');
+        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        try {
+          const res = await fetch('/api/cover-letter/draft', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            if (res.status === 401) {
+              showWriterHttpError(401, data);
+            } else if (res.status === 400) {
+              showWriterHttpError(400, data);
+            } else {
+              showWriterHttpError(res.status, data);
+            }
+            const msg = (data && data.message) ? data.message : (data && data.error) ? data.error : String(res.status);
+            setStatus(`자소서 draft 실패: ${msg}`);
+            return;
+          }
+          renderWriterDraftsSuccess(data);
+          const n = (data.drafts) ? data.drafts.length : 0;
+          setStatus(`자소서 초안 완료 · drafts=${n}`);
+        } catch (e) {
+          setStatus('자소서 draft 예외');
+          const errArea = document.getElementById('writerDraftErrorArea');
+          const line = document.getElementById('writerErrorLine');
+          const pre = document.getElementById('writerErrorJson');
+          const cards = document.getElementById('writerDraftCards');
+          if (cards) cards.innerHTML = '';
+          resetWriterUsedAssetsDisplay();
+          if (errArea && line && pre) {
+            errArea.style.display = 'block';
+            line.textContent = '';
+            pre.style.display = 'block';
+            pre.textContent = JSON.stringify({ error: String(e) }, null, 2);
+          }
+        } finally {
+          if (btn) {
+            btn.disabled = false;
+            btn.textContent = prevLabel || '초안 생성';
+          }
+        }
+      });
+
+      window.addEventListener('load', () => {
+        // 로딩 상태가 오래가면 사용자가 “왜 안 뜨지?”를 바로 알 수 있도록 시작 메시지를 준다.
+        setStatus('loading /api/me...');
+        loadMe();
+        initWriterQuestionList();
+      });
+    </script>

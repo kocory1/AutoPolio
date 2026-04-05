@@ -19,6 +19,7 @@ from src.api.auth import router as auth_router
 from src.api.github import router as github_router
 from src.api.user_assets import router as user_assets_router
 from src.db.sqlite import connect as sqlite_connect, create_all_tables_async
+from src.web.cover_letter_page import cover_letter_html as cover_letter_html_view
 from src.web.dashboard import dashboard_html as dashboard_html_view
 from src.utils.langsmith import configure_langsmith
 
@@ -67,6 +68,10 @@ def create_app() -> FastAPI:
     @app.get("/dashboard", response_class=HTMLResponse)
     async def dashboard() -> HTMLResponse:
         return HTMLResponse(dashboard_html_view)
+
+    @app.get("/cover-letter", response_class=HTMLResponse)
+    async def cover_letter_page() -> HTMLResponse:
+        return HTMLResponse(cover_letter_html_view)
 
     return app
 

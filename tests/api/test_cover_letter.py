@@ -407,3 +407,137 @@ async def test_ensure_selected_repos_embedded_invokes_job_when_chroma_empty(
     assert mock_job.await_args.kwargs["user_id"] == "u1"
     assert mock_job.await_args.kwargs["repo_full_name"] == "owner/repo-a"
     assert mock_job.await_args.kwargs["code_document_ids"] == ["owner/repo-a/foo.py"]
+
+
+def _insert_draft(tmp_db, draft_id: str, *, answer: str) -> None:
+    async def setup() -> None:
+        conn = await connect(tmp_db)
+        await conn.execute(
+            """
+            INSERT INTO drafts (
+                id, user_id, job_id, question_text, max_chars, answer, round,
+                created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                draft_id,
+                "u1",
+                None,
+                "지원 동기",
+                500,
+                answer,
+                0,
+                "2026-03-01",
+                "2026-03-01",
+            ),
+        )
+        await conn.commit()
+        await conn.close()
+
+    _run(setup())
+
+
+def test_inspect_unauthorized(draft_client: TestClient) -> None:
+    r = draft_client.post("/api/cover-letter/inspect", json={"draft_id": "x"})
+    assert r.status_code == 401
+
+
+def test_inspect_draft_not_found(draft_client: TestClient) -> None:
+    _set_session(draft_client, {"user_id": "u1"})
+    r = draft_client.post("/api/cover-letter/inspect", json={"draft_id": str(uuid.uuid4())})
+    assert r.status_code == 404
+    assert r.json().get("message") == "DRAFT_NOT_FOUND"
+
+
+def test_inspect_round_out_of_range(draft_client: TestClient, tmp_db) -> None:
+    did = str(uuid.uuid4())
+    _insert_draft(tmp_db, did, answer="내용")
+    _set_session(draft_client, {"user_id": "u1"})
+    r = draft_client.post(
+        "/api/cover-letter/inspect",
+        json={"draft_id": did, "round": 5},
+    )
+    assert r.status_code == 400
+    assert r.json().get("message") == "INSPECT_ROUND_OUT_OF_RANGE"
+
+
+def test_inspect_empty_draft(draft_client: TestClient, tmp_db) -> None:
+    did = str(uuid.uuid4())
+    _insert_draft(tmp_db, did, answer="   ")
+    _set_session(draft_client, {"user_id": "u1"})
+    r = draft_client.post("/api/cover-letter/inspect", json={"draft_id": did, "round": 0})
+    assert r.status_code == 400
+    assert r.json().get("message") == "EMPTY_DRAFT"
+
+
+def test_inspect_success_first_round(draft_client: TestClient, tmp_db, monkeypatch: pytest.MonkeyPatch) -> None:
+    did = str(uuid.uuid4())
+    _insert_draft(tmp_db, did, answer="초안 본문")
+
+    captured: dict[str, Any] = {}
+
+    class FakeInspectorGraph:
+        async def ainvoke(self, state: dict) -> dict:
+            captured["state"] = dict(state)
+            return {
+                "suggestions": [
+                    {"section": "전체", "suggestion": "보완", "rationale": "테스트", "priority": "high"}
+                ],
+                "draft": "초안 본문",
+            }
+
+    monkeypatch.setattr("src.api.cover_letter.build_inspector_graph", lambda: FakeInspectorGraph())
+
+    _set_session(draft_client, {"user_id": "u1"})
+    r = draft_client.post("/api/cover-letter/inspect", json={"draft_id": did, "round": 0})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["draft_id"] == did
+    assert body["round"] == 0
+    assert body["max_rounds"] == 5
+    assert len(body["suggestions"]) == 1
+    st = captured.get("state") or {}
+    assert st.get("draft") == "초안 본문"
+    assert st.get("user_edited") == ""
+
+
+def test_inspect_success_user_edited_path(draft_client: TestClient, tmp_db, monkeypatch: pytest.MonkeyPatch) -> None:
+    did = str(uuid.uuid4())
+    _insert_draft(tmp_db, did, answer="원본")
+
+    captured: dict[str, Any] = {}
+
+    class FakeInspectorGraph:
+        async def ainvoke(self, state: dict) -> dict:
+            captured["state"] = dict(state)
+            return {"suggestions": []}
+
+    monkeypatch.setattr("src.api.cover_letter.build_inspector_graph", lambda: FakeInspectorGraph())
+
+    _set_session(draft_client, {"user_id": "u1"})
+    r = draft_client.post(
+        "/api/cover-letter/inspect",
+        json={"draft_id": did, "user_edited": "수정한 초안", "round": 2},
+    )
+    assert r.status_code == 200, r.text
+    st = captured.get("state") or {}
+    assert st.get("draft") == ""
+    assert st.get("user_edited") == "수정한 초안"
+    assert st.get("round") == 2
+
+
+def test_inspect_graph_error(draft_client: TestClient, tmp_db, monkeypatch: pytest.MonkeyPatch) -> None:
+    did = str(uuid.uuid4())
+    _insert_draft(tmp_db, did, answer="내용 있음")
+
+    class FakeInspectorGraph:
+        async def ainvoke(self, state: dict) -> dict:
+            return {"error": "user_id is required"}
+
+    monkeypatch.setattr("src.api.cover_letter.build_inspector_graph", lambda: FakeInspectorGraph())
+
+    _set_session(draft_client, {"user_id": "u1"})
+    r = draft_client.post("/api/cover-letter/inspect", json={"draft_id": did})
+    assert r.status_code == 400
+    assert "user_id" in r.json().get("message", "")

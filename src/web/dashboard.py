@@ -1,235 +1,98 @@
 from __future__ import annotations
 
 """
-대시보드 HTML (개발용). `src/app/main.py` 라우트에서 참조한다.
+워크스페이스 HTML: GitHub 연결 · 레포 선택 · 코드 임베딩(RAG).
+자소서 작성/수정은 `cover_letter_page` 참고.
 """
 
-dashboard_html = r"""
-<!doctype html>
+from src.web.ui_theme import CSS_GITHUB_DARK, header_html
+
+dashboard_html = (
+    r"""<!doctype html>
 <html lang="ko">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Autofolio Dashboard (Dev)</title>
+    <title>Autofolio — 워크스페이스</title>
     <style>
-      body { font-family: system-ui, -apple-system, Segoe UI, sans-serif; padding: 16px; max-width: 1200px; margin: 0 auto; color: #1e293b; }
-      pre { background: #f1f5f9; padding: 12px; overflow-x: auto; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 13px; }
-      button { padding: 10px 14px; margin-right: 8px; margin-bottom: 6px; border-radius: 6px; cursor: pointer; border: 1px solid #cbd5e1; background: #fff; }
-      button:hover { filter: brightness(0.97); }
-      hr { border: none; border-top: 1px solid #e2e8f0; margin: 28px 0; }
-      .demo-panel {
-        border: 1px solid #93c5fd;
-        border-radius: 12px;
-        padding: 20px 22px;
-        margin: 28px 0;
-        background: linear-gradient(165deg, #eff6ff 0%, #f8fafc 55%);
-        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.08);
-      }
-      .demo-panel h2 { margin-top: 0; color: #1e40af; font-size: 1.35rem; }
-      .demo-panel .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #2563eb; color: #fff; margin-right: 6px; vertical-align: middle; }
-      .demo-steps { margin: 12px 0 18px 1.2em; line-height: 1.65; color: #334155; }
-      .demo-steps li { margin-bottom: 6px; }
-      .btn-demo-primary { background: #2563eb !important; color: #fff !important; border-color: #1d4ed8 !important; font-weight: 600; }
-      .btn-demo-secondary { background: #475569 !important; color: #fff !important; border-color: #334155 !important; }
-      .btn-demo-ghost { background: #fff !important; border-color: #94a3b8 !important; color: #0f172a !important; }
-      #embeddingResult { min-height: 3rem; max-height: 480px; }
-      .hint { font-size: 0.9rem; color: #475569; margin: 8px 0 0 0; line-height: 1.5; }
-      .section-title { color: #0f172a; border-left: 4px solid #2563eb; padding-left: 10px; margin-top: 1.5rem; }
-      #writerDraftDemo .wd-q-row { border: 1px solid #d1fae5; border-radius: 8px; padding: 12px; margin-bottom: 10px; background: #fff; }
-      #writerDraftDemo .wd-card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; background: #fff; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06); }
-      #writerDraftDemo .wd-card-sub { font-size: 0.85rem; color: #64748b; margin-bottom: 10px; line-height: 1.45; }
-      #writerDraftDemo .wd-card-body { white-space: pre-wrap; line-height: 1.55; color: #0f172a; word-break: break-word; }
-      #writerDraftDemo .wd-card-body.wd-fail { color: #b45309; }
-      #writerDraftDemo .wd-char-badge { display: inline-block; margin-top: 10px; padding: 3px 10px; border-radius: 999px; background: #ecfdf5; color: #047857; font-size: 12px; font-weight: 600; border: 1px solid #a7f3d0; }
-      #writerDraftDemo .wd-repo-tag { display: inline-block; margin: 4px 6px 0 0; padding: 4px 10px; border-radius: 999px; background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; font-size: 12px; }
-      #writerDraftDemo .wd-essay-yes { display: inline-block; padding: 6px 12px; border-radius: 8px; background: #dcfce7; color: #166534; font-size: 13px; font-weight: 600; border: 1px solid #86efac; }
-      #writerDraftDemo .wd-essay-no { display: inline-block; padding: 6px 12px; border-radius: 8px; background: #f1f5f9; color: #64748b; font-size: 13px; border: 1px solid #e2e8f0; }
-      #writerDraftDemo #writerDraftErrorArea { display: none; margin-top: 12px; padding: 12px; border-radius: 8px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 14px; }
-      #writerDraftDemo #writerErrorJson { margin-top: 8px; background: #fff; color: #334155; border: 1px solid #e2e8f0; }
-      #repoCardsGrid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-        gap: 14px;
-        margin-top: 12px;
-      }
-      .repo-card {
-        border: 1px solid #bfdbfe;
-        border-radius: 10px;
-        padding: 12px 14px;
-        background: #fff;
-        box-shadow: 0 1px 3px rgba(37, 99, 235, 0.08);
-      }
-      .repo-card h4 { margin: 0 0 8px 0; font-size: 0.95rem; color: #0f172a; word-break: break-all; }
-      .repo-card .repo-card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-      .repo-card .repo-tree-wrap {
-        max-height: 240px;
-        overflow: auto;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
-        padding: 6px 8px;
-        margin: 8px 0;
-        font-size: 13px;
-        background: #f8fafc;
-      }
-      .repo-card .repo-card-status { font-size: 12px; color: #64748b; margin-top: 6px; min-height: 1.2em; }
-      .repo-card .repo-save-ok { color: #15803d; font-size: 12px; font-weight: 600; }
-      #btnEmbedAllRepos { font-size: 15px; padding: 12px 18px; }
-      .repo-card-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0 8px 0; font-size: 13px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
-      .repo-tab-btn { border: none; border-bottom: 2px solid transparent; background: transparent; cursor: pointer; padding: 6px 10px; margin-top: 2px; color: #64748b; }
-      .repo-tab-btn.repo-tab-active { font-weight: 700; border-bottom-color: #2563eb; color: #1e40af; }
-      .repo-tab-panel { display: none; }
-      .repo-tab-panel.repo-tab-visible { display: block; }
-      .repo-card-error { margin: 8px 0; padding: 8px 10px; border-radius: 6px; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-size: 12px; display: none; }
-      .repo-tab-panel .repoBranchRef { width: 100%; max-width: 260px; padding: 6px 8px; border-radius: 4px; border: 1px solid #cbd5e1; font-size: 12px; }
-
-      .repo-view-pre { max-height: 220px; overflow: auto; font-size: 12px; margin-top: 8px; }
-      .repo-commits-pre { max-height: 220px; overflow: auto; font-size: 12px; margin-top: 8px; }
+"""
+    + CSS_GITHUB_DARK
+    + r"""
     </style>
   </head>
   <body>
-    <h2>Autofolio Dev Dashboard</h2>
-    <p class="hint">OAuth · GitHub API · 선택 레포/assets · <strong>코드 임베딩(Chroma)</strong> · <strong>채용공고 parse → job_id</strong> · <strong>자소서 Draft</strong> 개발용 화면입니다.</p>
-    <div style="margin-bottom: 12px;">
-      <button id="loginBtn">GitHub 로그인</button>
-      <button id="logoutBtn">로그아웃</button>
-    </div>
-    <div style="margin-bottom: 12px;">
-      <strong>Status:</strong>
-      <span id="status">loading...</span>
-    </div>
-    <h3>/api/me</h3>
-    <pre id="me"></pre>
+"""
+    + header_html("hub")
+    + r"""
+    <main class="af-main">
+      <div class="af-hero">
+        <h1>워크스페이스</h1>
+        <p>GitHub 레포와 코드를 연결하고 임베딩해 증거 기반 자소서·포트폴리오에 쓸 RAG를 만듭니다. 자소서 초안·첨삭은 <a class="af-link" href="/cover-letter">자소서</a> 페이지에서 이어갑니다.</p>
+      </div>
 
-    <hr style="margin: 24px 0;" />
-    <h2 class="section-title" style="margin-top: 0;">GitHub API · 선택 assets</h2>
+      <section class="af-card" aria-labelledby="session-title">
+        <div class="af-section-label">Session</div>
+        <h2 id="session-title">계정</h2>
+        <p class="af-hint">상단 <strong>GitHub 로그인</strong> 후 세션 상태가 아래에 표시됩니다.</p>
+        <h3 class="af-subtitle">GET /api/me</h3>
+        <pre id="me" class="af-pre"></pre>
+      </section>
 
-    <div style="margin-bottom: 12px;">
-      <button id="btnRepos">GET /api/github/repos</button>
-      <button id="btnSelectedRepos">GET /api/user/selected-repos</button>
-    </div>
-    <pre id="repos"></pre>
-    <pre id="selectedRepos"></pre>
+      <section class="af-card" aria-labelledby="github-api-title">
+        <div class="af-section-label">Repository</div>
+        <h2 id="github-api-title">GitHub API · 선택 레포</h2>
+        <p class="af-hint">공개 레포 목록을 불러오고, 지원에 쓸 레포를 선택해 저장합니다.</p>
+        <div class="af-row-actions" style="margin:14px 0;">
+          <button type="button" class="af-btn af-btn-ghost" id="btnRepos">GET /api/github/repos</button>
+          <button type="button" class="af-btn af-btn-ghost" id="btnSelectedRepos">GET /api/user/selected-repos</button>
+        </div>
+        <pre id="repos" class="af-pre"></pre>
+        <pre id="selectedRepos" class="af-pre af-mt-sm"></pre>
 
-    <div style="margin-top: 12px; margin-bottom: 18px;">
-      <h3>내 레포 선택 (저장된 레포 만들기)</h3>
-      <div id="repoList" style="margin-bottom: 10px;"></div>
-      <button id="btnSaveSelectedRepos">선택 레포 저장</button>
-      <button id="btnLoadSelectedRepos">저장된 레포 불러오기</button>
-    </div>
+        <h3 class="af-subtitle">내 레포 선택</h3>
+        <div id="repoList" class="af-field"></div>
+        <div class="af-row-actions">
+          <button type="button" class="af-btn af-btn-primary" id="btnSaveSelectedRepos">선택 레포 저장</button>
+          <button type="button" class="af-btn af-btn-ghost" id="btnLoadSelectedRepos">저장된 레포 불러오기</button>
+        </div>
+      </section>
 
-    <section class="demo-panel" id="embeddingDemo" aria-labelledby="embed-demo-title">
-      <h2 id="embed-demo-title"><span class="tag">NEW</span> GitHub 코드 임베딩 데모</h2>
-      <p class="hint">
-        저장된 <strong>선택 레포 전체</strong>를 카드로 보여 줍니다. 레포마다 파일 트리를 불러 체크한 뒤
-        <strong>전체 임베딩</strong>으로 순서대로 저장 → SQLite 동기화 → 임베딩을 실행합니다.
-        Chroma <code>user_assets_{user_id}</code> · <code>.env</code>의 <code>OPENAI_API_KEY</code> 참고.
-      </p>
-      <ol class="demo-steps">
-        <li><strong>GitHub 로그인</strong> → 위에서 레포 체크 → <strong>선택 레포 저장</strong></li>
-        <li>카드 탭 <strong>파일 선택</strong>: 트리 로드 → 체크 → 저장 · <strong>파일 보기</strong>·<strong>커밋</strong>은 같은 레포에서 조회</li>
-        <li><strong>전체 임베딩</strong>: 각 레포마다 PUT assets → sync-from-assets → POST embedding (DB)</li>
-      </ol>
-      <div style="margin-bottom: 12px;">
-        <label for="embedRef"><strong>ref</strong> (브랜치·SHA, 선택):</label>
-        <input id="embedRef" style="width: 240px; padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="예: main" />
-        <div style="margin-top: 10px;">
-          <label style="cursor: pointer;">
-            <input type="checkbox" id="embedIncludeSummaries" checked />
-            응답에 <strong>LLM 요약문</strong> 포함 (<code>include_summaries</code>)
-          </label>
+      <section class="af-card" id="embeddingDemo" aria-labelledby="embed-demo-title">
+        <div class="af-section-label">Evidence · RAG</div>
+        <h2 id="embed-demo-title" class="af-title-row"><span class="af-tag">embed</span> 코드 임베딩</h2>
+        <p class="af-hint">
+          선택한 레포의 코드를 <strong>Chroma</strong>에 임베딩합니다. Writer·Inspector가 레포 근거를 인용할 수 있습니다.
+          컬렉션 <code>user_assets_{user_id}</code> · <code>.env</code>의 <code>OPENAI_API_KEY</code>.
+        </p>
+        <ol class="demo-steps">
+          <li><strong>GitHub 로그인</strong> → 레포 체크 → <strong>선택 레포 저장</strong></li>
+          <li>카드 <strong>파일 선택</strong>: 트리 로드 → 체크 → 저장 · <strong>파일 보기</strong>·<strong>커밋</strong></li>
+          <li><strong>전체 임베딩</strong>: PUT assets → sync-from-assets → POST embedding</li>
+        </ol>
+        <div style="margin-bottom: 12px;">
+          <label class="af-label" for="embedRef">ref (브랜치·SHA, 선택)</label>
+          <input id="embedRef" class="af-input" style="max-width:280px;" placeholder="예: main" />
+          <div style="margin-top: 10px;">
+            <label style="cursor: pointer; color: var(--fg-muted); font-size: 0.88rem;">
+              <input type="checkbox" id="embedIncludeSummaries" checked />
+              응답에 LLM 요약 포함 (<code>include_summaries</code>)
+            </label>
+          </div>
         </div>
-      </div>
-      <div style="margin-bottom: 14px;">
-        <button type="button" class="btn-demo-primary" id="btnEmbedAllRepos">전체 임베딩 (저장된 레포 순서)</button>
-        <span class="hint" style="margin-left: 10px;">각 카드에 진행 상태가 표시됩니다.</span>
-      </div>
-      <p class="hint">
-        API: <code>PUT /api/user/selected-repo-assets</code> ·
-        <code>POST /api/user/asset-hierarchy/sync-from-assets</code> ·
-        <code>POST /api/github/repos/&lt;owner%2Frepo&gt;/embedding</code>
-      </p>
-      <div id="repoCardsGrid" aria-label="저장된 레포 카드"></div>
-      <h4 style="margin: 18px 0 6px 0; color: #334155;">마지막 임베딩 응답</h4>
-      <pre id="embeddingResult"></pre>
-    </section>
-
-    <section class="demo-panel" id="writerDraftDemo" aria-labelledby="writer-draft-title" style="border-color: #6ee7b7; background: linear-gradient(165deg, #ecfdf5 0%, #f8fafc 55%);">
-      <h2 id="writer-draft-title"><span class="tag" style="background:#059669;">Writer</span> 자소서 초안 생성 (Writer 그래프)</h2>
-      <p class="hint">
-        <strong>GitHub 로그인</strong> 필수. 아래 <code>job_id</code>는 선택이며, 아래 <strong>채용공고 저장</strong>으로 받은 값을 쓰면 공고 맥락이 붙습니다.
-        코드 RAG는 위 <strong>임베딩 데모</strong>를 먼저 완료하는 것이 좋습니다.
-      </p>
-      <div style="margin-bottom: 12px;">
-        <label for="draftJobSelect">공고 선택 (최근 저장)</label><br />
-        <select id="draftJobSelect" style="width: min(100%, 420px); padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1; max-width: 100%;">
-          <option value="">공고 맥락 없이</option>
-        </select>
-        <p class="hint" style="margin-top: 6px;">목록에는 <strong>기업명 · 포지션</strong>이 보이며, 초안 요청 시에는 DB의 <code>job_id</code>(UUID)가 전송됩니다.</p>
-      </div>
-      <div style="margin-bottom: 8px;">
-        <span style="font-weight:600;color:#0f172a;">문항</span>
-        <span class="hint" style="margin-left:8px;">1~5개 · 각 문항마다 본문·글자 제한을 지정합니다.</span>
-      </div>
-      <div id="writerQuestionList"></div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px;">
-        <button type="button" class="btn-demo-ghost" id="btnWriterAddQ">문항 추가</button>
-        <button type="button" class="btn-demo-primary" id="btnWriterDraft" style="background:#059669 !important; border-color:#047857 !important;">초안 생성</button>
-      </div>
-      <div id="writerDraftErrorArea" aria-live="polite">
-        <div id="writerErrorLine"></div>
-        <pre id="writerErrorJson"></pre>
-      </div>
-      <h4 style="margin: 16px 0 10px 0; color: #334155;">결과</h4>
-      <div id="writerDraftCards"></div>
-      <div id="writerUsedAssetsBlock" style="margin-top: 16px; padding-top: 14px; border-top: 1px solid #d1fae5;">
-        <div style="font-size: 0.9rem; font-weight: 600; color: #334155; margin-bottom: 8px;">참조 레포</div>
-        <div id="writerRepoTags" class="hint" style="color:#64748b;">참조 레포 없음</div>
-        <div style="margin-top: 12px;">
-          <span id="writerEssaysBadge" class="wd-essay-no">합격 자소서 미참조</span>
-          <div id="writerEssaysList" class="wd-essay-list" style="margin-top: 8px; font-size: 0.88rem; color: #334155; padding-left: 8px;"></div>
+        <div style="margin-bottom: 14px;">
+          <button type="button" class="af-btn af-btn-primary" id="btnEmbedAllRepos">전체 임베딩 (저장된 레포 순서)</button>
+          <span class="af-hint" style="margin-left: 10px;">카드별 진행 상태가 표시됩니다.</span>
         </div>
-      </div>
-    </section>
-
-    <section class="demo-panel" id="jobParseDemo" aria-labelledby="job-parse-title" style="border-color: #fcd34d; background: linear-gradient(165deg, #fffbeb 0%, #f8fafc 55%);">
-      <h2 id="job-parse-title"><span class="tag" style="background:#d97706;">Jobs</span> 채용공고 저장 (parse)</h2>
-      <p class="hint">
-        <code>POST /api/jobs/parse</code>로 SQLite <code>jobs</code> 테이블에 공고를 넣고 <strong>job_id</strong>를 받습니다.
-        성공 시 위 <strong>자소서 초안 생성</strong>의 <strong>job_id</strong> 입력칸에 자동으로 채웁니다. 이후 <code>POST /api/cover-letter/draft</code>에 같은 id를 넘기면 공고 맥락이 붙습니다.
-      </p>
-      <div style="margin-bottom: 10px;">
-        <label><input type="radio" name="jobSource" value="manual" checked /> manual (직접 입력)</label>
-        &nbsp;&nbsp;
-        <label><input type="radio" name="jobSource" value="url" /> url (페이지 가져오기 · OPENAI 있으면 구조화)</label>
-      </div>
-      <div id="jobManualFields">
-        <div style="margin-bottom: 6px;"><label>company_name *</label><br />
-          <input id="jobCompanyName" style="width: min(100%, 420px); padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="기업명" />
-        </div>
-        <div style="margin-bottom: 6px;"><label>position_title *</label><br />
-          <input id="jobPositionTitle" style="width: min(100%, 420px); padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="포지션명" />
-        </div>
-        <div style="margin-bottom: 6px;"><label>company_persona (선택)</label><br />
-          <input id="jobCompanyPersona" style="width: min(100%, 420px); padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="기업 인재상" />
-        </div>
-        <div style="margin-bottom: 6px;"><label>duties (한 줄에 한 항목)</label><br />
-          <textarea id="jobDuties" rows="3" style="width: min(100%, 560px); padding: 8px;" placeholder="담당 업무"></textarea>
-        </div>
-        <div style="margin-bottom: 6px;"><label>requirements</label><br />
-          <textarea id="jobRequirements" rows="2" style="width: min(100%, 560px); padding: 8px;" placeholder="자격 요건 (줄 단위)"></textarea>
-        </div>
-        <div style="margin-bottom: 10px;"><label>preferences</label><br />
-          <textarea id="jobPreferences" rows="2" style="width: min(100%, 560px); padding: 8px;" placeholder="우대 사항 (줄 단위)"></textarea>
-        </div>
-      </div>
-      <div id="jobUrlField" style="display: none; margin-bottom: 10px;">
-        <label>채용공고 URL *</label><br />
-        <input id="jobUrl" style="width: min(100%, 520px); padding: 8px; border-radius: 6px; border: 1px solid #cbd5e1;" placeholder="https://..." />
-      </div>
-      <button type="button" class="btn-demo-primary" id="btnJobParse" style="background:#d97706 !important; border-color:#b45309 !important;">POST /api/jobs/parse</button>
-      <h4 style="margin: 14px 0 6px 0; color: #334155;">응답</h4>
-      <pre id="jobParseResult"></pre>
-    </section>
+        <p class="af-hint">
+          <code>PUT /api/user/selected-repo-assets</code> ·
+          <code>POST /api/user/asset-hierarchy/sync-from-assets</code> ·
+          <code>POST /api/github/repos/&lt;owner%2Frepo&gt;/embedding</code>
+        </p>
+        <div id="repoCardsGrid" aria-label="저장된 레포 카드"></div>
+        <h2 class="af-subtitle">마지막 임베딩 응답</h2>
+        <pre id="embeddingResult" class="af-pre"></pre>
+      </section>
+    </main>
 
     <script>
       const setStatus = (text) => { document.getElementById('status').textContent = text; };
@@ -1271,39 +1134,6 @@ dashboard_html = r"""
         return { res, data };
       }
 
-      async function loadRecentJobs(selectJobId) {
-        const sel = document.getElementById('draftJobSelect');
-        if (!sel) return;
-        try {
-          const res = await fetch('/api/jobs/recent?limit=40', { credentials: 'include' });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            return;
-          }
-          const prev = selectJobId || sel.value || '';
-          sel.innerHTML = '';
-          const opt0 = document.createElement('option');
-          opt0.value = '';
-          opt0.textContent = '공고 맥락 없이';
-          sel.appendChild(opt0);
-          const list = data.jobs || [];
-          list.forEach((j) => {
-            if (!j || !j.id) return;
-            const opt = document.createElement('option');
-            opt.value = j.id;
-            const cn = (j.company_name && String(j.company_name).trim()) ? String(j.company_name).trim() : '(기업명 없음)';
-            const pos = (j.position && String(j.position).trim()) ? String(j.position).trim() : '';
-            opt.textContent = pos ? `${cn} · ${pos}` : cn;
-            sel.appendChild(opt);
-          });
-          if (prev && Array.from(sel.options).some((o) => o.value === prev)) {
-            sel.value = prev;
-          }
-        } catch (e) {
-          /* ignore */
-        }
-      }
-
       async function loadMe() {
         setStatus('loading /api/me...');
         try {
@@ -1333,7 +1163,6 @@ dashboard_html = r"""
           } catch (e) {
             /* ignore */
           }
-          await loadRecentJobs();
           // repo 전체 목록은 GitHub API를 추가로 호출하므로, 초기엔 로드하지 않는다.
         } catch (e) {
           setStatus('failed to load /api/me');
@@ -1397,389 +1226,12 @@ dashboard_html = r"""
         await embedAllReposSequential();
       });
 
-      document.querySelectorAll('input[name="jobSource"]').forEach((el) => {
-        el.addEventListener('change', () => {
-          const manual = document.querySelector('input[name="jobSource"]:checked').value === 'manual';
-          const mf = document.getElementById('jobManualFields');
-          const uf = document.getElementById('jobUrlField');
-          if (mf) mf.style.display = manual ? 'block' : 'none';
-          if (uf) uf.style.display = manual ? 'none' : 'block';
-        });
-      });
-
-      safeOnClick('btnJobParse', async () => {
-        const manual = document.querySelector('input[name="jobSource"]:checked').value === 'manual';
-        let payload;
-        if (manual) {
-          const company = (document.getElementById('jobCompanyName')?.value || '').trim();
-          const pos = (document.getElementById('jobPositionTitle')?.value || '').trim();
-          if (!company || !pos) {
-            setPre('jobParseResult', { error: 'company_name과 position_title은 필수입니다.' });
-            setStatus('공고 parse: 필수 필드 누락');
-            return;
-          }
-          const splitLines = (id) =>
-            (document.getElementById(id)?.value || '')
-              .split('\\n')
-              .map((s) => s.trim())
-              .filter(Boolean);
-          payload = {
-            source_type: 'manual',
-            company_name: company,
-            position_title: pos,
-            company_persona: (document.getElementById('jobCompanyPersona')?.value || '').trim(),
-            duties: splitLines('jobDuties'),
-            requirements: splitLines('jobRequirements'),
-            preferences: splitLines('jobPreferences'),
-          };
-        } else {
-          const u = (document.getElementById('jobUrl')?.value || '').trim();
-          if (!u) {
-            setPre('jobParseResult', { error: 'url을 입력하세요.' });
-            setStatus('공고 parse: url 없음');
-            return;
-          }
-          payload = { source_type: 'url', url: u };
-        }
-        setStatus('공고 parse 요청 중…');
-        const jp = document.getElementById('jobParseDemo');
-        if (jp) jp.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        try {
-          const res = await fetch('/api/jobs/parse', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-          const data = await res.json().catch(() => ({}));
-          setPre('jobParseResult', { http_status: res.status, response: data });
-          if (res.ok && data.job_id) {
-            loadRecentJobs(data.job_id);
-            setStatus(`공고 저장 완료 · job_id=${data.job_id}`);
-          } else {
-            const msg = (data && data.message) ? data.message : (data && data.error) ? data.error : String(res.status);
-            setStatus(`공고 parse 실패: ${msg}`);
-          }
-        } catch (e) {
-          setStatus('공고 parse 예외');
-          setPre('jobParseResult', { error: String(e) });
-        }
-      });
-
-      const WRITER_Q_MIN = 1;
-      const WRITER_Q_MAX = 5;
-
-      function collectWriterQuestions() {
-        const list = document.getElementById('writerQuestionList');
-        if (!list) return [];
-        const out = [];
-        list.querySelectorAll('.wd-q-row').forEach((row) => {
-          const ta = row.querySelector('.wd-q-text');
-          const nm = row.querySelector('.wd-q-max');
-          const t = ta && ta.value ? String(ta.value).trim() : '';
-          const maxChars = Math.max(1, parseInt(nm && nm.value ? nm.value : '500', 10) || 500);
-          out.push({ question_text: t, max_chars: maxChars });
-        });
-        return out;
-      }
-
-      function refreshWriterRemoveButtons() {
-        const list = document.getElementById('writerQuestionList');
-        if (!list) return;
-        const n = list.children.length;
-        list.querySelectorAll('.wd-q-remove').forEach((btn) => {
-          btn.disabled = n <= WRITER_Q_MIN;
-        });
-        const addBtn = document.getElementById('btnWriterAddQ');
-        if (addBtn) addBtn.disabled = n >= WRITER_Q_MAX;
-      }
-
-      function addWriterQuestionRow() {
-        const list = document.getElementById('writerQuestionList');
-        if (!list || list.children.length >= WRITER_Q_MAX) return;
-        const wrap = document.createElement('div');
-        wrap.className = 'wd-q-row';
-        const top = document.createElement('div');
-        top.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;';
-        const lab = document.createElement('span');
-        lab.style.fontWeight = '600';
-        lab.style.color = '#0f172a';
-        lab.textContent = '문항';
-        const rm = document.createElement('button');
-        rm.type = 'button';
-        rm.className = 'wd-q-remove btn-demo-ghost';
-        rm.textContent = '삭제';
-        rm.addEventListener('click', () => {
-          if (list.children.length <= WRITER_Q_MIN) return;
-          wrap.remove();
-          refreshWriterRemoveButtons();
-        });
-        top.appendChild(lab);
-        top.appendChild(rm);
-        const ta = document.createElement('textarea');
-        ta.className = 'wd-q-text';
-        ta.rows = 3;
-        ta.placeholder = '지원 동기를 작성해주세요.';
-        ta.style.cssText = 'width:100%;min-width:0;padding:8px;border-radius:6px;border:1px solid #cbd5e1;box-sizing:border-box;';
-        const row2 = document.createElement('div');
-        row2.style.marginTop = '8px';
-        const lab2 = document.createElement('label');
-        lab2.style.cssText = 'font-size:0.9rem;color:#334155;margin-right:8px;';
-        lab2.textContent = 'max_chars ';
-        const num = document.createElement('input');
-        num.type = 'number';
-        num.className = 'wd-q-max';
-        num.value = '500';
-        num.min = '1';
-        num.style.cssText = 'width:100px;padding:6px;border-radius:6px;border:1px solid #cbd5e1;';
-        row2.appendChild(lab2);
-        row2.appendChild(num);
-        wrap.appendChild(top);
-        wrap.appendChild(ta);
-        wrap.appendChild(row2);
-        list.appendChild(wrap);
-        refreshWriterRemoveButtons();
-      }
-
-      function initWriterQuestionList() {
-        const list = document.getElementById('writerQuestionList');
-        if (!list || list.children.length) return;
-        addWriterQuestionRow();
-      }
-
-      function hideWriterError() {
-        const el = document.getElementById('writerDraftErrorArea');
-        if (el) el.style.display = 'none';
-        const line = document.getElementById('writerErrorLine');
-        const pre = document.getElementById('writerErrorJson');
-        if (line) line.textContent = '';
-        if (pre) {
-          pre.textContent = '';
-          pre.style.display = 'none';
-        }
-      }
-
-      function resetWriterUsedAssetsDisplay() {
-        const wrap = document.getElementById('writerRepoTags');
-        const badge = document.getElementById('writerEssaysBadge');
-        const listEl = document.getElementById('writerEssaysList');
-        if (wrap) {
-          wrap.innerHTML = '';
-          wrap.style.color = '#64748b';
-          wrap.textContent = '참조 레포 없음';
-        }
-        if (badge) {
-          badge.className = 'wd-essay-no';
-          badge.textContent = '합격 자소서 미참조';
-        }
-        if (listEl) {
-          listEl.innerHTML = '';
-          listEl.style.display = 'none';
-        }
-      }
-
-      function showWriterClientMessage(text) {
-        const errArea = document.getElementById('writerDraftErrorArea');
-        const line = document.getElementById('writerErrorLine');
-        const pre = document.getElementById('writerErrorJson');
-        const cards = document.getElementById('writerDraftCards');
-        if (!errArea || !line || !pre) return;
-        if (cards) cards.innerHTML = '';
-        resetWriterUsedAssetsDisplay();
-        errArea.style.display = 'block';
-        line.textContent = text;
-        pre.style.display = 'none';
-        pre.textContent = '';
-      }
-
-      function showWriterHttpError(status, data) {
-        const errArea = document.getElementById('writerDraftErrorArea');
-        const line = document.getElementById('writerErrorLine');
-        const pre = document.getElementById('writerErrorJson');
-        const cards = document.getElementById('writerDraftCards');
-        if (!errArea || !line || !pre) return;
-        if (cards) cards.innerHTML = '';
-        resetWriterUsedAssetsDisplay();
-        errArea.style.display = 'block';
-        if (status === 401) {
-          line.textContent = '로그인이 필요합니다';
-          pre.style.display = 'none';
-          pre.textContent = '';
-        } else if (status === 400) {
-          line.textContent = '문항을 확인해주세요';
-          pre.style.display = 'none';
-          pre.textContent = '';
-        } else {
-          line.textContent = '';
-          pre.style.display = 'block';
-          pre.textContent = JSON.stringify(data, null, 2);
-        }
-      }
-
-      function setWriterUsedAssets(ua) {
-        ua = ua || {};
-        const repos = Array.isArray(ua.github_repos) ? ua.github_repos : [];
-        const essays = Array.isArray(ua.accepted_essays) ? ua.accepted_essays : [];
-        const wrap = document.getElementById('writerRepoTags');
-        const badge = document.getElementById('writerEssaysBadge');
-        const listEl = document.getElementById('writerEssaysList');
-        if (!wrap || !badge) return;
-        wrap.innerHTML = '';
-        wrap.style.color = '';
-        if (!repos.length) {
-          wrap.style.color = '#64748b';
-          wrap.textContent = '참조 레포 없음';
-        } else {
-          repos.forEach((r) => {
-            const fn = (r && r.full_name) ? r.full_name : '';
-            if (!fn) return;
-            const s = document.createElement('span');
-            s.className = 'wd-repo-tag';
-            s.textContent = fn;
-            wrap.appendChild(s);
-          });
-        }
-        const hasEssayList = essays.length > 0;
-        badge.className = ua.accepted_essays_used || hasEssayList ? 'wd-essay-yes' : 'wd-essay-no';
-        badge.textContent = ua.accepted_essays_used || hasEssayList ? '합격 자소서 참조 ✓' : '합격 자소서 미참조';
-        if (listEl) {
-          listEl.innerHTML = '';
-          if (hasEssayList) {
-            listEl.style.display = 'block';
-            essays.forEach((e) => {
-              if (!e || typeof e !== 'object') return;
-              const co = (e.company != null && String(e.company).trim()) ? String(e.company).trim() : '';
-              const po = (e.position != null && String(e.position).trim()) ? String(e.position).trim() : '';
-              const q = (e.question != null && String(e.question).trim()) ? String(e.question).trim() : '';
-              const head = [co, po].filter(Boolean).join(' · ');
-              const line = document.createElement('div');
-              line.className = 'wd-essay-line';
-              const qShort = q.length > 80 ? q.slice(0, 80) + '…' : q;
-              line.textContent = (head ? ('- ' + head + ': "' + qShort + '"') : ('- "' + qShort + '"'));
-              listEl.appendChild(line);
-            });
-          } else {
-            listEl.style.display = 'none';
-          }
-        }
-      }
-
-      function renderWriterDraftsSuccess(data) {
-        hideWriterError();
-        const container = document.getElementById('writerDraftCards');
-        if (!container) return;
-        container.innerHTML = '';
-        const drafts = (data && data.drafts) ? data.drafts : [];
-        drafts.forEach((d) => {
-          const card = document.createElement('div');
-          card.className = 'wd-card';
-          const sub = document.createElement('div');
-          sub.className = 'wd-card-sub';
-          sub.textContent = (d && d.question_text) ? d.question_text : '(문항 없음)';
-          const body = document.createElement('div');
-          body.className = 'wd-card-body';
-          const ans = (d && d.answer !== undefined && d.answer !== null) ? String(d.answer) : '';
-          if (!ans.trim()) {
-            body.classList.add('wd-fail');
-            body.textContent = '생성 실패 (에셋 없음 또는 API 키 미설정)';
-          } else {
-            body.textContent = ans;
-          }
-          const cb = document.createElement('span');
-          cb.className = 'wd-char-badge';
-          const cc = (d && d.char_count !== undefined && d.char_count !== null) ? d.char_count : ans.length;
-          cb.textContent = '글자 수 ' + String(cc);
-          card.appendChild(sub);
-          card.appendChild(body);
-          card.appendChild(cb);
-          container.appendChild(card);
-        });
-        setWriterUsedAssets(data.used_assets || {});
-      }
-
-      safeOnClick('btnWriterAddQ', () => {
-        const list = document.getElementById('writerQuestionList');
-        if (!list || list.children.length >= WRITER_Q_MAX) return;
-        addWriterQuestionRow();
-      });
-
-      safeOnClick('btnWriterDraft', async () => {
-        const selJob = document.getElementById('draftJobSelect');
-        const jobId = (selJob && selJob.value) ? String(selJob.value).trim() : '';
-        const qs = collectWriterQuestions();
-        if (qs.length < WRITER_Q_MIN || qs.length > WRITER_Q_MAX) {
-          showWriterClientMessage('문항을 확인해주세요');
-          setStatus('draft: 문항 개수 오류');
-          return;
-        }
-        if (qs.some((q) => !q.question_text.trim())) {
-          showWriterClientMessage('문항을 확인해주세요');
-          setStatus('draft: 문항 텍스트 누락');
-          return;
-        }
-        const payload = { questions: qs };
-        if (jobId) payload.job_id = jobId;
-        const btn = document.getElementById('btnWriterDraft');
-        const prevLabel = btn ? btn.textContent : '';
-        if (btn) {
-          btn.disabled = true;
-          btn.textContent = '생성 중...';
-        }
-        setStatus('자소서 초안 요청 중…');
-        const panel = document.getElementById('writerDraftDemo');
-        if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        try {
-          const res = await fetch('/api/cover-letter/draft', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-          const data = await res.json().catch(() => ({}));
-          if (!res.ok) {
-            if (res.status === 401) {
-              showWriterHttpError(401, data);
-            } else if (res.status === 400) {
-              showWriterHttpError(400, data);
-            } else {
-              showWriterHttpError(res.status, data);
-            }
-            const msg = (data && data.message) ? data.message : (data && data.error) ? data.error : String(res.status);
-            setStatus(`자소서 draft 실패: ${msg}`);
-            return;
-          }
-          renderWriterDraftsSuccess(data);
-          const n = (data.drafts) ? data.drafts.length : 0;
-          setStatus(`자소서 초안 완료 · drafts=${n}`);
-        } catch (e) {
-          setStatus('자소서 draft 예외');
-          const errArea = document.getElementById('writerDraftErrorArea');
-          const line = document.getElementById('writerErrorLine');
-          const pre = document.getElementById('writerErrorJson');
-          const cards = document.getElementById('writerDraftCards');
-          if (cards) cards.innerHTML = '';
-          resetWriterUsedAssetsDisplay();
-          if (errArea && line && pre) {
-            errArea.style.display = 'block';
-            line.textContent = '';
-            pre.style.display = 'block';
-            pre.textContent = JSON.stringify({ error: String(e) }, null, 2);
-          }
-        } finally {
-          if (btn) {
-            btn.disabled = false;
-            btn.textContent = prevLabel || '초안 생성';
-          }
-        }
-      });
-
       window.addEventListener('load', () => {
-        // 로딩 상태가 오래가면 사용자가 “왜 안 뜨지?”를 바로 알 수 있도록 시작 메시지를 준다.
         setStatus('loading /api/me...');
         loadMe();
-        initWriterQuestionList();
       });
     </script>
   </body>
 </html>
 """.strip()
+)

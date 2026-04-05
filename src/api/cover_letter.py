@@ -18,6 +18,8 @@ from pydantic import BaseModel, ConfigDict
 
 from src.db.sqlite.client import connect
 from src.db.vector import get_user_asset_collection
+from src.graphs.inspector_graph import build_inspector_graph
+from src.graphs.inspector_graph.edge import MAX_ROUNDS
 from src.graphs.writer_graph import build_writer_graph
 from src.service.github_embedding.hierarchy import fetch_code_document_ids_for_repo
 from src.service.github_embedding.service import run_github_repo_embedding_job
@@ -42,6 +44,19 @@ class DraftRequest(BaseModel):
 
     job_id: str | None = None
     questions: list[QuestionItem] | None = None
+
+
+class InspectRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    draft_id: str
+    """Writer 저장 draft 행 id."""
+
+    user_edited: str | None = None
+    """비어 있으면 DB 초안으로 첫 Inspector. 값이 있으면 수정본 기준 재첨삭."""
+
+    round: int = 0
+    """첨삭 라운드(프롬프트·문서 MAX_ROUNDS와 정합). 0=Writer 직후 첫 분석."""
 
 
 def _repo_has_embedding_docs(user_id: str, repo_full_name: str) -> bool:
@@ -115,6 +130,35 @@ async def fetch_job_context(job_id: str | None) -> tuple[dict[str, Any], str | N
             "preferred": row["preferred"],
         }
         return job_parsed, row["id"]
+    finally:
+        await conn.close()
+
+
+async def fetch_draft_row(user_id: str, draft_id: str) -> dict[str, Any] | None:
+    """drafts 단건 조회 (해당 user_id만)."""
+    conn = await connect()
+    try:
+        cur = await conn.execute(
+            """
+            SELECT id, user_id, job_id, question_text, max_chars, answer, round
+            FROM drafts
+            WHERE id = ? AND user_id = ?
+            """,
+            (draft_id, user_id),
+        )
+        row = await cur.fetchone()
+        await cur.close()
+        if not row:
+            return None
+        return {
+            "id": row["id"],
+            "user_id": row["user_id"],
+            "job_id": row["job_id"],
+            "question_text": row["question_text"],
+            "max_chars": row["max_chars"],
+            "answer": row["answer"],
+            "round": row["round"],
+        }
     finally:
         await conn.close()
 
@@ -300,4 +344,87 @@ async def create_cover_letter_draft(request: Request, body: DraftRequest) -> JSO
         "drafts": drafts,
         "used_assets": used_assets,
         "created_at": now,
+    }
+
+
+@router.post("/inspect", response_model=None)
+async def inspect_cover_letter(request: Request, body: InspectRequest) -> JSONResponse | dict[str, Any]:
+    """Writer 저장 draft에 대해 Inspector 그래프를 한 번 실행해 보완 제안을 반환한다.
+
+    첫 호출: ``user_edited`` 생략(또는 빈 문자열) — DB ``answer`` 기준.
+    재첨삭: 수정본을 ``user_edited``로 보내고 ``round``를 1씩 올린다 (0 ≤ round < MAX_ROUNDS).
+    """
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return _error_response(401, "UNAUTHORIZED", "UNAUTHORIZED")
+
+    user_id = str(user_id)
+    if body.round < 0 or body.round >= MAX_ROUNDS:
+        return _error_response(400, "BAD_REQUEST", "INSPECT_ROUND_OUT_OF_RANGE")
+
+    draft_id = (body.draft_id or "").strip()
+    if not draft_id:
+        return _error_response(400, "BAD_REQUEST", "DRAFT_ID_REQUIRED")
+
+    row = await fetch_draft_row(user_id, draft_id)
+    if row is None:
+        return _error_response(404, "NOT_FOUND", "DRAFT_NOT_FOUND")
+
+    job_id_val = row.get("job_id")
+    job_id_str = str(job_id_val) if job_id_val is not None else None
+    job_parsed, _ = await fetch_job_context(job_id_str)
+
+    try:
+        selected_repos = await get_selected_repos(user_id)
+    except Exception:
+        selected_repos = []
+
+    await ensure_selected_repos_embedded(user_id, selected_repos)
+
+    edited = (body.user_edited or "").strip()
+    answer = (row.get("answer") or "") if isinstance(row.get("answer"), str) else ""
+    if not isinstance(answer, str):
+        answer = str(answer or "")
+
+    if edited:
+        init_state: dict[str, Any] = {
+            "user_id": user_id,
+            "question": str(row.get("question_text") or ""),
+            "job_parsed": job_parsed,
+            "draft": "",
+            "user_edited": edited,
+            "round": body.round,
+        }
+    else:
+        init_state = {
+            "user_id": user_id,
+            "question": str(row.get("question_text") or ""),
+            "job_parsed": job_parsed,
+            "draft": answer,
+            "user_edited": "",
+            "round": body.round,
+        }
+
+    if not edited and not (answer or "").strip():
+        return _error_response(400, "BAD_REQUEST", "EMPTY_DRAFT")
+
+    graph = build_inspector_graph()
+    result = await graph.ainvoke(init_state)
+
+    err = result.get("error")
+    if err:
+        msg = str(err).strip() or "INSPECTOR_FAILED"
+        if len(msg) > 400:
+            msg = msg[:397] + "..."
+        return _error_response(400, "BAD_REQUEST", msg)
+
+    suggestions = result.get("suggestions")
+    if not isinstance(suggestions, list):
+        suggestions = []
+
+    return {
+        "draft_id": draft_id,
+        "round": body.round,
+        "max_rounds": MAX_ROUNDS,
+        "suggestions": suggestions,
     }

@@ -17,6 +17,8 @@ from src.service.github_embedding.prompts import (
 DEFAULT_CHAT_MODEL = os.getenv("OPENAI_MODEL", "gpt-5-mini")
 # 단일 요청 토큰 상한 완화용(비용·지연과 트레이드오프)
 MAX_SOURCE_CHARS = int(os.getenv("GITHUB_EMBED_MAX_SOURCE_CHARS", "120000"))
+# gpt-5-mini 등 일부 모델은 temperature 커스텀 불가(기본 1만 허용). 미설정 시 API에 넣지 않음.
+# gpt-4o 등에서 0.25를 쓰려면 OPENAI_CHAT_TEMPERATURE=0.25
 
 
 def _truncate_source(source_code: str) -> tuple[str, bool]:
@@ -33,24 +35,30 @@ class OpenAIDeveloperSummarizer:
         *,
         model: str | None = None,
         api_key: str | None = None,
-        temperature: float = 0.25,
+        temperature: float | None = None,
     ) -> None:
         key = api_key or os.getenv("OPENAI_API_KEY")
         if not key:
             raise RuntimeError("OPENAI_API_KEY is not set")
         self._client = AsyncOpenAI(api_key=key)
         self._model = model or DEFAULT_CHAT_MODEL
-        self._temperature = temperature
+        if temperature is not None:
+            self._temperature: float | None = temperature
+        else:
+            raw = os.getenv("OPENAI_CHAT_TEMPERATURE", "").strip()
+            self._temperature = float(raw) if raw else None
 
     async def _complete(self, system: str, user: str) -> str:
-        resp = await self._client.chat.completions.create(
-            model=self._model,
-            temperature=self._temperature,
-            messages=[
+        params: dict = {
+            "model": self._model,
+            "messages": [
                 {"role": "system", "content": system},
                 {"role": "user", "content": user},
             ],
-        )
+        }
+        if self._temperature is not None:
+            params["temperature"] = self._temperature
+        resp = await self._client.chat.completions.create(**params)
         choice = resp.choices[0].message.content
         return (choice or "").strip()
 
