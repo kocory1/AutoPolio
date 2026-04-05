@@ -24,8 +24,10 @@ def after_re_inspect(state: InspectorState) -> str:
 
     - user_edited 있음 & round < MAX_ROUNDS → load_draft (재첨삭 계속)
     - user_edited 없음 또는 round >= MAX_ROUNDS → END (재첨삭 종료)
+
+    re_inspect가 round를 증가시킨 뒤의 값으로 비교한다.
     """
-    user_edited = state.get("user_edited")
+    user_edited = (state.get("user_edited") or "").strip()
     round_val = state.get("round") or 0
     if not user_edited or round_val >= MAX_ROUNDS:
         return "__end__"
