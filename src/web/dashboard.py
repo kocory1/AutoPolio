@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-"""
-워크스페이스 HTML: GitHub 연결 · 레포 선택 · 코드 임베딩(RAG).
-자소서 작성/수정은 `cover_letter_page` 참고.
-"""
-
 from src.web.ui_theme import CSS_GITHUB_DARK, header_html
+
+# 워크스페이스 HTML: GitHub 연결 · 레포 선택 · 코드 임베딩(RAG).
+# 자소서 작성/수정은 `cover_letter_page` 참고.
 
 dashboard_html = (
     r"""<!doctype html>
